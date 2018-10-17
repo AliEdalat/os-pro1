@@ -11,8 +11,8 @@
      
 #define TRUE   1  
 #define FALSE  0  
-#define PORT 8884
-#define HEART_BEAT_PORT 1117  
+#define PORT 8880
+#define HEART_BEAT_PORT 11209
 
 typedef struct request Request;
 
@@ -51,11 +51,9 @@ Request* extract_request(char * buffer, int size){
 	return request_temp;
 }
 
-void send_partner_info(Request* src, Request* dest){
-	int sockfd, newsockfd, portno, clilen;
-    char buffer[1025];
-    struct sockaddr_in serv_addr, cli_addr;
-    int n, i, size = 0;
+void send_partner_info(Request* src, int dest){
+    char buffer[1025] = {'p', 'a', 'r', 't', 'n', 'e', 'r', ':', ' '};
+    int i, size = 9;
 
     for (i = 0; i < sizeof(src->ip); ++i)
     {
@@ -63,11 +61,11 @@ void send_partner_info(Request* src, Request* dest){
     	{
     		break;
     	}
-    	buffer[i] = src->ip[i];
+    	buffer[size] = src->ip[i];
     	size++;
     }
 
-    buffer[i] = ' ';
+    buffer[size] = ' ';
     size++;
 
     for (i = 0; i < sizeof(src->port); ++i)
@@ -76,11 +74,11 @@ void send_partner_info(Request* src, Request* dest){
     	{
     		break;
     	}
-    	buffer[i] = src->port[i];
+    	buffer[size] = src->port[i];
     	size++;
     }
 
-    buffer[i] = ' ';
+    buffer[size] = ' ';
     size++;
 
     for (i = 0; i < sizeof(src->name); ++i)
@@ -89,30 +87,13 @@ void send_partner_info(Request* src, Request* dest){
     	{
     		break;
     	}
-    	buffer[i] = src->name[i];
+    	buffer[size] = src->name[i];
     	size++;
     }
+    buffer[size] = '\0';
     size++;
     
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) 
-       error("ERROR opening socket");
-    bzero((char *) &serv_addr, sizeof(serv_addr));
-    
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = (char*)(dest->port);
-    if (bind(sockfd, (struct sockaddr *) &serv_addr,
-             sizeof(serv_addr)) < 0) 
-             error("ERROR on binding");
-    listen(sockfd,5);
-    clilen = sizeof(cli_addr);
-    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-    if (newsockfd < 0) 
-         error("ERROR on accept");
-    n = write(newsockfd, buffer, size);
-    if (n < 0) error("ERROR writing to socket");
-    printf("%s to %s \n", buffer, dest->port);
+    send(dest, buffer, size, 0);
 }
      
 int main(int argc , char *argv[])   
@@ -132,7 +113,7 @@ int main(int argc , char *argv[])
     fd_set readfds, writefds;   
          
     //a message  
-    char message[20] = "ECHO Daemon v1.0 \r\n";   
+    char message[15] = "127.0.0.1 8884";   
      
     //initialise all client_socket[] to 0 so not checked  
     for (i = 0; i < max_clients; i++)   
@@ -174,6 +155,7 @@ int main(int argc , char *argv[])
     address.sin_addr.s_addr = INADDR_ANY;   
     address.sin_port = htons( PORT );   
          
+    memset(&heart_beat_address, '0', sizeof(heart_beat_address)); 
     heart_beat_address.sin_family = AF_INET;
     heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
     heart_beat_address.sin_port = htons( HEART_BEAT_PORT );
@@ -260,10 +242,10 @@ int main(int argc , char *argv[])
 					new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));   
 	           
 	            //send new connection greeting message  
-	            if( send(new_socket, message, strlen(message), 0) != strlen(message) )   
-	            {   
-	                perror("send");   
-	            }   
+	            // if( send(new_socket, message, strlen(message), 0) != strlen(message) )   
+	            // {   
+	            //     perror("send");   
+	            // }   
 	                 
 	            puts("Welcome message sent successfully");   
 	                 
@@ -300,7 +282,8 @@ int main(int argc , char *argv[])
 	                         
 	                    //Close the socket and mark as 0 in list for reuse  
 	                    close( sd );   
-	                    client_socket[i] = 0;   
+	                    client_socket[i] = 0;
+	                    requests[i] = NULL;   
 	                }   
 	                     
 	                //Echo back the message that came in  
@@ -314,12 +297,15 @@ int main(int argc , char *argv[])
 	                    int j;
 	                    for (j = 0; j < 30; ++j)
 	                    {
-	                    	if (requests[j] != NULL && j != i)
+	                    	if (requests[j] != NULL && j != i && client_socket[j] != 0)
 	                    	{
 	                    		printf("hhhhhhhhhhhhhh\n");
-	                    		send_partner_info(requests[j], requests[i]);
+	                    		send_partner_info(requests[j], sd);
+	                    		send(client_socket[j], "paired", 6, 0);
 	                    		requests[i] = NULL;
 	                    		requests[j] = NULL;
+	                    		client_socket[i] = 0;
+	                    		client_socket[j] = 0;
 	                    		break;
 	                    	}
 	                    }
@@ -328,19 +314,12 @@ int main(int argc , char *argv[])
 	        }
 	    }
 	} else {
-    	// while(1){
-    	// 	int socket = accept(heart_beat_socket, (struct sockaddr*)NULL, NULL);
-    	// 	// // time_t ticks = time(NULL);
-	    // 	// printf("wefwegreayuwgewygewyuhekjtgeruwwut4uie\n");  
-     //  //       //send new connection greeting message  
-     //        if( write(socket, message, strlen(message)) != strlen(message) )   
-     //        {   
-     //            perror("send");   
-     //        }   
+    	while(1){
+    		send(heart_beat_socket, message, strlen(message), 0);   
              
-     //        printf("Heartbeat message sent successfully\n");
-     //        sleep(1);
-     //    }
+            printf("Heartbeat message sent successfully\n");
+            sleep(1);
+        }
     }     
     return 0;   
 }   
