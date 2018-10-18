@@ -18,9 +18,11 @@ typedef struct request Request;
 
 struct request
 {
+	int mode;
 	char ip[1025];
 	char port[1025];
 	char name[1025];
+	char partner_name[1025];
 };
 
 Request* extract_request(char * buffer, int size){
@@ -35,19 +37,30 @@ Request* extract_request(char * buffer, int size){
 					request_temp->ip[j] = '\0';
 				else if(state == 1)
 					request_temp->port[j] = '\0';
-				else
+				else if(state == 2)
 					request_temp->name[j] = '\0';
 				state++;
 				j = 0;
 			} else if(state == 0){
 				request_temp->ip[j++] = buffer[i];
+				request_temp->mode = 0;
 			} else if(state == 1){
 				request_temp->port[j++] = buffer[i];
-			} else{
+				request_temp->mode = 0;
+			} else if(state == 2){
 				request_temp->name[j++] = buffer[i];
+				request_temp->mode = 0;
+			} else {
+				request_temp->partner_name[j++] = buffer[i];
+				request_temp->mode = 1;
 			}
 	}
-	printf("ip : %s\nport : %s\nname : %s\n", request_temp->ip, request_temp->port, request_temp->name);
+	if (state == 2)
+		request_temp->name[j] = '\0';
+	else if (state == 3)
+		request_temp->partner_name[j] = '\0';
+	printf("mode : %d\nip : %s\nport : %s\nname : %s\npname : %s\n",
+		request_temp->mode, request_temp->ip, request_temp->port, request_temp->name, request_temp->partner_name);
 	return request_temp;
 }
 
@@ -100,8 +113,8 @@ int main(int argc , char *argv[])
 {   
     int opt = TRUE;
     int opt_write = TRUE;   
-    int master_socket , heart_beat_socket , addrlen , write_addrlen , new_socket , write_new_socket , client_socket[30] ,  
-          max_clients = 30 , activity , write_activity , i , valread , sd;   
+    int master_socket, heart_beat_socket, addrlen, write_addrlen, new_socket,write_new_socket,
+    	client_socket[30], max_clients = 30, activity, write_activity, i, valread, sd;   
     int max_sd;   
     struct sockaddr_in address, heart_beat_address;   
          
@@ -294,21 +307,53 @@ int main(int argc , char *argv[])
 	                    buffer[valread] = '\0';   
 	                    //send(sd , buffer , strlen(buffer) , 0 );
 	                    requests[i] = extract_request(buffer, valread);
+	                    
 	                    int j;
-	                    for (j = 0; j < 30; ++j)
-	                    {
-	                    	if (requests[j] != NULL && j != i && client_socket[j] != 0)
-	                    	{
-	                    		printf("hhhhhhhhhhhhhh\n");
-	                    		send_partner_info(requests[j], sd);
-	                    		send(client_socket[j], "paired", 6, 0);
-	                    		requests[i] = NULL;
-	                    		requests[j] = NULL;
-	                    		client_socket[i] = 0;
-	                    		client_socket[j] = 0;
-	                    		break;
-	                    	}
-	                    }
+	                    if (requests[i]->mode == 0){
+		                    for (j = 0; j < 30; ++j)
+		                    {
+		                    	if (requests[j] != NULL && requests[j]->mode == 1 && j != i && client_socket[j] != 0
+		                    		&& strcmp(requests[j]->partner_name, requests[i]->name) == 0)
+		                    	{
+		                    		printf("hhhhhhhhhhhhhh1\n");
+		                    		send_partner_info(requests[j], sd);
+		                    		send(client_socket[j], "paired", 6, 0);
+		                    		requests[i] = NULL;
+		                    		requests[j] = NULL;
+		                    		client_socket[i] = 0;
+		                    		client_socket[j] = 0;
+		                    		break;
+		                    	}
+
+		                    	if (requests[j] != NULL && requests[j]->mode == 0 && j != i && client_socket[j] != 0)
+		                    	{
+		                    		printf("hhhhhhhhhhhhhh\n");
+		                    		send_partner_info(requests[j], sd);
+		                    		send(client_socket[j], "paired", 6, 0);
+		                    		requests[i] = NULL;
+		                    		requests[j] = NULL;
+		                    		client_socket[i] = 0;
+		                    		client_socket[j] = 0;
+		                    		break;
+		                    	}
+		                    }
+		                } else {
+		                	for (j = 0; j < 30; ++j)
+		                    {
+		                    	if (j != i && client_socket[j] != 0 && requests[j] != NULL
+		                    		&& strcmp(requests[j]->name, requests[i]->partner_name) == 0)
+		                    	{
+		                    		printf("kkkkkkkkkkkkkkkkkk\n");
+		                    		send_partner_info(requests[i], client_socket[j]);
+		                    		send(client_socket[i], "paired", 6, 0);
+		                    		requests[i] = NULL;
+		                    		requests[j] = NULL;
+		                    		client_socket[i] = 0;
+		                    		client_socket[j] = 0;
+		                    		break;
+		                    	}
+		                    }
+		                }
 	                }   
 	            }   
 	        }

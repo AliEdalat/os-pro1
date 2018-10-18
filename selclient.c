@@ -25,7 +25,6 @@ struct partner
 };
 
 int mystrcmp(char* a, char* b, int len_a, int len_b, int size){
-    printf("ffff\n");
     if (len_a >= size && len_b >= size)
     {
         for (int i = 0; i < size; ++i)
@@ -56,6 +55,7 @@ int extract_sel(char* buffer, int map[][10])
     int i = buffer[5] - '0';
     int j = buffer[7] - '0';
     int val = map[i][j];
+    printf("val %d, i %d, j %d\n", val, i, j);
     map[i][j] = 0;
     return val;
 }
@@ -125,16 +125,32 @@ void fetch_map(int map[][10], char* file_name){
     }
 }
 
+void select_room(int* state, int sd){	
+    char input[4];
+    // printf("i%d\n", map[2][2]);
+    write(1, "select :\n", 9);
+    
+    read(0, input, 4);
+    printf("input : %s\n", input);
+    char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
+    send(sd, message, 9, 0);
+    (*state)++;
+}
+
 void handle_game(int* state, int sd, int map[][10]){
 	char buffer[1024] = {0};
 	int valread;
 	if (*state == 3) {
-	    char input[3];
-	    write(1, "select :\n", 9);
-	    read(0, input, 3);
-	    char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
-	    send(sd, message, 9, 0);
-	    (*state)++;
+	    // char input[3];
+	    // printf("i%d\n", map[2][2]);
+	    // write(1, "select : ", 9);
+	    
+	    // read(0, input, 3);
+	    // printf("input : %s\n", input);
+	    // char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
+	    // send(sd, message, 9, 0);
+	    // (*state)++;
+	    select_room(state, sd);
 	} else if (*state == 4) {
 	    // char buffer[1024] = {0};
 	    valread = read(sd, buffer, 1024); 
@@ -145,8 +161,10 @@ void handle_game(int* state, int sd, int map[][10]){
 	        return;
 	    else if (mystrcmp(buffer, res_message, valread, 5, 5)){
 	        int res = extract_result(buffer);
-	        if (res)
+	        if (res){
 	            *state = 3;
+	        	select_room(state, sd);
+	        }
 	        else
 	            *state = 5;
 	    }
@@ -160,6 +178,7 @@ void handle_game(int* state, int sd, int map[][10]){
 	    char win_message[9] ={'r', 'e', 's', ':', ' ', 'w', 'i', 'n', '\0'};
 	    if (mystrcmp(buffer, sel_text, valread, 5, 5)){
 	        int val = extract_sel(buffer, map);
+	        // printf("val %d\n", val);
 	        if (is_map_clear(map)){
 	            send(sd, win_message, 9, 0);
 	            write(1, "lost\n", 5);
@@ -170,8 +189,9 @@ void handle_game(int* state, int sd, int map[][10]){
 	            *state = 5;
 	        }
 	        else{
-	            send(sd, one_message, 7, 0);
+	            send(sd, zero_message, 7, 0);
 	            *state = 3;
+	            select_room(state, sd);
 	        }
 	    }
 	}
@@ -195,10 +215,18 @@ int main(int argc , char *argv[])
     fetch_map(map, "map.txt");
          
     //a message  
+    char name[50] = {0};
+    char pname[50] = {0};
     char message[11] = "127.0.0.1 ";
     strcat(message, argv[1]);
-    strcat(message, " ali");   
-	
+    strcat(message, " ");
+    strcat(message, argv[2]);
+    if (argc == 4)
+    {
+    	strcat(message, " ");
+    	strcat(message, argv[3]);
+    }
+    
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
     { 
         printf("\n Socket creation error \n"); 
@@ -305,9 +333,9 @@ int main(int argc , char *argv[])
 		    }
 		    client_peer = 1;
 		    printf("connect to %d\n", atoi(partner->port));
-            char input[3];
+            char input[4];
             write(1, "select :\n", 9);
-            read(0, input, 3);
+            read(0, input, 4);
             char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
             send(sock2, message, 9, 0);
             state = 4;
@@ -394,9 +422,12 @@ int main(int argc , char *argv[])
 	            if (mystrcmp(buffer, sel_text, valread, 5, 5) && state == 10)
 	            	state = 5;
 	            if (state == 3) {
-		            char input[3];
-		            write(1, "select :\n", 9);
-		            read(0, input, 3);
+		            char input[4];
+		            printf("i%d\n", map[2][2]);
+	    			write(1, "select :\n", 9);
+	    
+	    			read(0, input, 4);
+	    			printf("input : %s\n", input);
 		            char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
 		            send(sd, message, 9, 0);
 		            state++;
@@ -410,8 +441,10 @@ int main(int argc , char *argv[])
 		                break;
 		            else if (mystrcmp(buffer, res_message, valread, 5, 5)){
 		                int res = extract_result(buffer);
-		                if (res)
+		                if (res){
 		                    state = 3;
+		                	select_room(&state, sd);
+		                }
 		                else
 		                    state = 5;
 		            }
@@ -435,8 +468,9 @@ int main(int argc , char *argv[])
 		                    state = 5;
 		                }
 		                else{
-		                    send(sd, one_message, 7, 0);
+		                    send(sd, zero_message, 7, 0);
 		                    state = 3;
+		                    select_room(&state, sd);
 		                }
 		            }
 		        }      
