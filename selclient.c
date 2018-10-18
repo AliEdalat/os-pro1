@@ -8,12 +8,14 @@
 #include <sys/socket.h>  
 #include <netinet/in.h>  
 #include <sys/time.h> //FD_SET, FD_ISSET, FD_ZERO macros
-#include <fcntl.h>  
+#include <fcntl.h> 
+#include <sys/ioctl.h> 
      
 #define TRUE   1  
 #define FALSE  0  
 #define PORT 8880
-#define HEART_BEAT_PORT 2222 
+#define HEART_BEAT_PORT 2222
+#define MAXRECVSTRING 255 
 
 typedef struct partner Partner;
 
@@ -187,6 +189,28 @@ void handle_game(int* state, int sd, int map[][10]){
 	    }
 	}
 }
+
+int extract_server_port(char* recv_string){
+	int i, j = 0;
+    int state = 0;
+    char port_string[250];
+    for (i = 0; i < 255; ++i)
+    {
+            if (recv_string[i] == ' ')
+            {
+                state++;
+                j = 0;
+            }
+
+            if (state == 1)
+            {
+            	port_string[j++] = recv_string[i];
+            }
+    }
+    port_string[j] = '\0';
+    printf("port : %d\n", atoi(port_string));
+    return atoi(port_string);	
+}
  
 int main(int argc , char *argv[])   
 {   
@@ -218,11 +242,20 @@ int main(int argc , char *argv[])
     	strcat(message, argv[3]);
     }
 
-    if( (heart_beat_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
+    if( (heart_beat_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
     {   
         perror("socket failed");   
         exit(EXIT_FAILURE);   
     }
+
+    // unsigned long nonblocking = 1;
+
+    // if (ioctl(heart_beat_socket, FIONBIO, &nonblocking) != 0){
+    //     perror("ioctlsocket() failed");
+    //     exit(EXIT_FAILURE);
+    // }
+
+    // fcntl(heart_beat_socket, F_SETFL, fcntl(heart_beat_socket, F_GETFL, 0) | O_NONBLOCK);
 
     if( setsockopt(heart_beat_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt_write,  
           sizeof(opt_write)) < 0 )   
@@ -236,10 +269,24 @@ int main(int argc , char *argv[])
     heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
     heart_beat_address.sin_port = htons( HEART_BEAT_PORT );
 
-    char live_buffer[15];
-    int heart_beat_addrlen = sizeof(heart_beat_address);
-    recvfrom(heart_beat_socket, live_buffer, sizeof(live_buffer), MSG_DONTWAIT, (struct sockaddr*)&heart_beat_address, (socklen_t*)&heart_beat_addrlen);
-    printf("wwwww : %s\n", live_buffer);
+    if (bind(heart_beat_socket, (struct sockaddr *) &heart_beat_address, sizeof(heart_beat_address)) < 0){
+        perror("bind() failed");   
+        exit(EXIT_FAILURE);
+    }
+
+    int recvStringLen;
+    char recvString[MAXRECVSTRING+1];
+    /* Receive a single datagram from the server */
+    if ((recvStringLen = recvfrom(heart_beat_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) < 0){
+        perror("recvfrom() failed");   
+        exit(EXIT_FAILURE);
+    }
+
+    recvString[recvStringLen] = '\0';
+    printf("Received: %s\n", recvString);    /* Print the received string */
+    close(heart_beat_socket);
+
+    int port = extract_server_port(recvString);
 
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
     { 
@@ -251,7 +298,7 @@ int main(int argc , char *argv[])
    
     serv_addr.sin_family = AF_INET; 
     serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(PORT); 
+    serv_addr.sin_port = htons(port); 
  
    
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
@@ -260,7 +307,7 @@ int main(int argc , char *argv[])
         return -1; 
     }
 
-    printf("connect to %d\n", PORT);
+    printf("connect to %d\n", port);
 
     //create a master socket  
     if( (master_socket = socket(AF_INET , SOCK_STREAM , 0)) == 0)   
