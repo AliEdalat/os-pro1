@@ -12,7 +12,7 @@
 #define TRUE   1  
 #define FALSE  0  
 #define PORT 8880
-#define HEART_BEAT_PORT 11209
+#define HEART_BEAT_PORT 2222
 
 typedef struct request Request;
 
@@ -126,7 +126,7 @@ int main(int argc , char *argv[])
     fd_set readfds, writefds;   
          
     //a message  
-    char message[15] = "127.0.0.1 8884";   
+    char message[15] = "127.0.0.1 8880";   
      
     //initialise all client_socket[] to 0 so not checked  
     for (i = 0; i < max_clients; i++)   
@@ -141,7 +141,7 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);   
     }
 
-    if( (heart_beat_socket = socket(AF_INET , SOCK_STREAM , 0)) == 0)   
+    if( (heart_beat_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
     {   
         perror("socket failed");   
         exit(EXIT_FAILURE);   
@@ -156,12 +156,12 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);   
     }   
      
-    // if( setsockopt(heart_beat_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt_write,  
-    //       sizeof(opt_write)) < 0 )   
-    // {   
-    //     perror("setsockopt");   
-    //     exit(EXIT_FAILURE);   
-    // }
+    if( setsockopt(heart_beat_socket, SOL_SOCKET, SO_BROADCAST, (char *)&opt_write,  
+          sizeof(opt_write)) < 0 )   
+    {   
+        perror("setsockopt");   
+        exit(EXIT_FAILURE);   
+    }
 
     //type of socket created  
     address.sin_family = AF_INET;   
@@ -187,11 +187,11 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);   
     }   
     
-    if (bind(heart_beat_socket, (struct sockaddr *)&heart_beat_address, sizeof(heart_beat_address))<0)   
-    {   
-        perror("bind failed");   
-        exit(EXIT_FAILURE);   
-    }
+    // if (bind(heart_beat_socket, (struct sockaddr *)&heart_beat_address, sizeof(heart_beat_address))<0)   
+    // {   
+    //     perror("bind failed");   
+    //     exit(EXIT_FAILURE);   
+    // }
     // if (listen(heart_beat_socket, 3) < 0)   
     // {   
     //     perror("listen");   
@@ -360,7 +360,9 @@ int main(int argc , char *argv[])
 	    }
 	} else {
     	while(1){
-    		send(heart_beat_socket, message, strlen(message), 0);   
+    		printf("before send...\n");
+    		sendto(heart_beat_socket, message, strlen(message), 0, (struct sockaddr*)&heart_beat_address,
+    			sizeof(heart_beat_address));   
              
             printf("Heartbeat message sent successfully\n");
             sleep(1);

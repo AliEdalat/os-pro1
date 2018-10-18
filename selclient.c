@@ -13,7 +13,7 @@
 #define TRUE   1  
 #define FALSE  0  
 #define PORT 8880
-#define HEART_BEAT_PORT 1120 
+#define HEART_BEAT_PORT 2222 
 
 typedef struct partner Partner;
 
@@ -141,15 +141,6 @@ void handle_game(int* state, int sd, int map[][10]){
 	char buffer[1024] = {0};
 	int valread;
 	if (*state == 3) {
-	    // char input[3];
-	    // printf("i%d\n", map[2][2]);
-	    // write(1, "select : ", 9);
-	    
-	    // read(0, input, 3);
-	    // printf("input : %s\n", input);
-	    // char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
-	    // send(sd, message, 9, 0);
-	    // (*state)++;
 	    select_room(state, sd);
 	} else if (*state == 4) {
 	    // char buffer[1024] = {0};
@@ -205,7 +196,7 @@ int main(int argc , char *argv[])
     int state = 0, master_socket, client_peer = 0, sock , sock2 , heart_beat_socket , addrlen , write_addrlen , new_socket , write_new_socket , client_socket = 0,  
           max_clients = 1 , activity , write_activity , i , valread , sd;   
     int max_sd;   
-    struct sockaddr_in address, serv_addr;   
+    struct sockaddr_in address, serv_addr, heart_beat_address;   
          
     char buffer[1025];  //data buffer of 1K  
          
@@ -226,11 +217,34 @@ int main(int argc , char *argv[])
     	strcat(message, " ");
     	strcat(message, argv[3]);
     }
-    
+
+    if( (heart_beat_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
+    {   
+        perror("socket failed");   
+        exit(EXIT_FAILURE);   
+    }
+
+    if( setsockopt(heart_beat_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt_write,  
+          sizeof(opt_write)) < 0 )   
+    {   
+        perror("setsockopt");   
+        exit(EXIT_FAILURE);   
+    }
+
+    memset(&heart_beat_address, '0', sizeof(heart_beat_address)); 
+    heart_beat_address.sin_family = AF_INET;
+    heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
+    heart_beat_address.sin_port = htons( HEART_BEAT_PORT );
+
+    char live_buffer[15];
+    int heart_beat_addrlen = sizeof(heart_beat_address);
+    recvfrom(heart_beat_socket, live_buffer, sizeof(live_buffer), MSG_DONTWAIT, (struct sockaddr*)&heart_beat_address, (socklen_t*)&heart_beat_addrlen);
+    printf("wwwww : %s\n", live_buffer);
+
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
     { 
         printf("\n Socket creation error \n"); 
-        return -1; 
+        return -1;
     }
 
     memset(&serv_addr, '0', sizeof(serv_addr)); 
