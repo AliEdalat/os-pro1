@@ -129,7 +129,7 @@ void fetch_map(int map[][10], char* file_name){
 
 void select_room(int* state, int sd){	
     char input[4];
-    // printf("i%d\n", map[2][2]);
+    printf("select select_room\n");
     write(1, "select :\n", 9);
     
     read(0, input, 4);
@@ -211,6 +211,15 @@ int extract_server_port(char* recv_string){
     printf("port : %d\n", atoi(port_string));
     return atoi(port_string);	
 }
+
+void copy(char* recvString, char* buffer){
+	int i = 0;
+	while(recvString[i] != '\0'){
+		buffer[i] = recvString[i];
+		i++;
+	}
+	buffer[i] = '\0';
+}
  
 int main(int argc , char *argv[])   
 {   
@@ -233,13 +242,13 @@ int main(int argc , char *argv[])
     char name[50] = {0};
     char pname[50] = {0};
     char message[11] = "127.0.0.1 ";
-    strcat(message, argv[1]);
+    strcat(message, argv[3]);
     strcat(message, " ");
-    strcat(message, argv[2]);
-    if (argc == 4)
+    strcat(message, argv[4]);
+    if (argc == 6)
     {
     	strcat(message, " ");
-    	strcat(message, argv[3]);
+    	strcat(message, argv[5]);
     }
 
     if( (heart_beat_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
@@ -248,26 +257,20 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);   
     }
 
-    // unsigned long nonblocking = 1;
-
-    // if (ioctl(heart_beat_socket, FIONBIO, &nonblocking) != 0){
-    //     perror("ioctlsocket() failed");
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // fcntl(heart_beat_socket, F_SETFL, fcntl(heart_beat_socket, F_GETFL, 0) | O_NONBLOCK);
-
-    if( setsockopt(heart_beat_socket, SOL_SOCKET, SO_REUSEADDR, (char *)&opt_write,  
-          sizeof(opt_write)) < 0 )   
-    {   
-        perror("setsockopt");   
-        exit(EXIT_FAILURE);   
+    struct timeval tv;
+	tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    if (setsockopt(heart_beat_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
+    {
+       printf("Couldn't set socket timeout\n");
+       return 0;
     }
+
 
     memset(&heart_beat_address, '0', sizeof(heart_beat_address)); 
     heart_beat_address.sin_family = AF_INET;
     heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
-    heart_beat_address.sin_port = htons( HEART_BEAT_PORT );
+    heart_beat_address.sin_port = htons(atoi(argv[1]));
 
     if (bind(heart_beat_socket, (struct sockaddr *) &heart_beat_address, sizeof(heart_beat_address)) < 0){
         perror("bind() failed");   
@@ -278,36 +281,40 @@ int main(int argc , char *argv[])
     char recvString[MAXRECVSTRING+1];
     /* Receive a single datagram from the server */
     if ((recvStringLen = recvfrom(heart_beat_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) < 0){
-        perror("recvfrom() failed");   
-        exit(EXIT_FAILURE);
+        perror("recvfrom() broadcast port of server has been failed!!!");   
+        //exit(EXIT_FAILURE);
+        state = 20;
+        close(heart_beat_socket);
     }
 
-    recvString[recvStringLen] = '\0';
-    printf("Received: %s\n", recvString);    /* Print the received string */
-    close(heart_beat_socket);
+    if (state == 0){
+	    recvString[recvStringLen] = '\0';
+	    printf("Received: %s\n", recvString);    /* Print the received string */
+	    close(heart_beat_socket);
 
-    int port = extract_server_port(recvString);
+	    int port = extract_server_port(recvString);
 
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-    { 
-        printf("\n Socket creation error \n"); 
-        return -1;
-    }
+	    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
+	    { 
+	        printf("\n Socket creation error \n"); 
+	        return -1;
+	    }
 
-    memset(&serv_addr, '0', sizeof(serv_addr)); 
-   
-    serv_addr.sin_family = AF_INET; 
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
-    serv_addr.sin_port = htons(port); 
- 
-   
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
-    { 
-        printf("\nConnection Failed \n"); 
-        return -1; 
-    }
+	    memset(&serv_addr, '0', sizeof(serv_addr)); 
+	   
+	    serv_addr.sin_family = AF_INET; 
+	    serv_addr.sin_addr.s_addr = INADDR_ANY;
+	    serv_addr.sin_port = htons(port); 
+	 
+	   
+	    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
+	    { 
+	        printf("\nConnection Failed \n"); 
+	        return -1; 
+	    }
 
-    printf("connect to %d\n", port);
+	    printf("connect to %d\n", port);
+	}
 
     //create a master socket  
     if( (master_socket = socket(AF_INET , SOCK_STREAM , 0)) == 0)   
@@ -329,7 +336,7 @@ int main(int argc , char *argv[])
     //type of socket created  
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;   
-    address.sin_port = htons(atoi(argv[1]));   
+    address.sin_port = htons(atoi(argv[3]));   
 
     //bind the socket to localhost port 8888  
     if (bind(master_socket, (struct sockaddr *)&address, sizeof(address))<0)   
@@ -337,7 +344,7 @@ int main(int argc , char *argv[])
         perror("bind failed");   
         exit(EXIT_FAILURE);   
     }   
-    printf("Listener on port %s \n", argv[1]);   
+    printf("Listener on port %s \n", argv[3]);   
          
     //try to specify maximum of 3 pending connections for the master socket  
     if (listen(master_socket, 3) < 0)   
@@ -373,7 +380,7 @@ int main(int argc , char *argv[])
         } else if (state == 2) {
             partner = extract_partner(buffer, valread);
             char buffer[1024] = {0};
-            close(sock);
+            // close(sock);
             if ((sock2 = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
 		    { 
 		        printf("\n Socket creation error \n"); 
@@ -396,11 +403,162 @@ int main(int argc , char *argv[])
 		    printf("connect to %d\n", atoi(partner->port));
             char input[4];
             write(1, "select :\n", 9);
+            printf("read : \n");
             read(0, input, 4);
             char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
+            printf("befor send sel...\n");
             send(sock2, message, 9, 0);
             state = 4;
             continue;
+        } else if (state == 20) {
+        	int client_broadcast_socket;
+        	struct sockaddr_in client_broadcast_address;
+        	if( (client_broadcast_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
+		    {   
+		        perror("socket failed");   
+		        exit(EXIT_FAILURE);   
+		    }
+
+		    struct timeval tv;
+			tv.tv_sec = 1;
+		    tv.tv_usec = 0;
+		    if (setsockopt(client_broadcast_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
+		    {
+		       printf("Couldn't set socket timeout\n");
+		       return 0;
+		    }
+
+		    memset(&client_broadcast_address, '0', sizeof(client_broadcast_address)); 
+		    client_broadcast_address.sin_family = AF_INET;
+		    client_broadcast_address.sin_addr.s_addr = INADDR_ANY;   
+		    client_broadcast_address.sin_port = htons(atoi(argv[2]));
+
+		    if (bind(client_broadcast_socket, (struct sockaddr *) &client_broadcast_address,
+		    		sizeof(client_broadcast_address)) < 0){
+		        perror("bind() failed");   
+		        exit(EXIT_FAILURE);
+		    }
+
+		    int recvStringLen;
+		    char recvString[MAXRECVSTRING+1];
+		    /* Receive a single datagram from the server */
+		    if ((recvStringLen = recvfrom(client_broadcast_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) < 0){
+		        perror("recvfrom() broadcast port of client has been failed!!!");   
+		        //exit(EXIT_FAILURE);
+		        state = 21;
+		        close(client_broadcast_socket);
+		        continue;
+		    }
+
+		    recvString[recvStringLen] = '\0';
+		    copy("partner: ", buffer);
+		    strcat(buffer, recvString);
+		    printf("%s\n", buffer);
+		    valread = recvStringLen + 9;
+		    close(client_broadcast_socket);
+		    state = 2;
+		    continue;
+        } else if (state == 21){
+			int client_broadcast_socket, opt_write = 1;
+        	struct sockaddr_in client_broadcast_address;
+        	struct timeval tv;
+			tv.tv_sec = 1;
+		    tv.tv_usec = 0;
+
+        	if((client_broadcast_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
+		    {   
+		        perror("socket failed");   
+		        exit(EXIT_FAILURE);   
+		    }
+
+		    if( setsockopt(client_broadcast_socket, SOL_SOCKET, SO_BROADCAST, (char *)&opt_write,  
+		          sizeof(opt_write)) < 0 )   
+		    {   
+		        perror("setsockopt");   
+		        exit(EXIT_FAILURE);   
+		    }
+
+
+		    memset(&client_broadcast_address, '0', sizeof(client_broadcast_address)); 
+		    client_broadcast_address.sin_family = AF_INET;
+		    client_broadcast_address.sin_addr.s_addr = INADDR_ANY;   
+		    client_broadcast_address.sin_port = htons(atoi(argv[2]));
+
+		    char message[11] = "127.0.0.1 ";
+		    strcat(message, argv[3]);
+		    strcat(message, " ");
+		    strcat(message, argv[4]);
+
+		    while(1){
+		    	//clear the socket set  
+		        FD_ZERO(&readfds);   
+		     
+		        //add master socket to set  
+		        FD_SET(master_socket, &readfds);   
+		        max_sd = master_socket;   
+		             
+		        //add child sockets to set     
+		        //socket descriptor  
+		        sd = client_socket;   
+		             
+		        //if valid socket descriptor then add to read list  
+		        if(sd > 0)   
+		            FD_SET( sd , &readfds);   
+		             
+		        //highest file descriptor number, need it for the select function  
+		        if(sd > max_sd)   
+		            max_sd = sd;
+		     
+		        //wait for an activity on one of the sockets , timeout is NULL ,  
+		        //so wait indefinitely
+		        printf("befor select ...\n");
+		        activity = select( max_sd + 1 , &readfds , NULL , NULL , &tv);   
+		       
+		        if ((activity < 0) && (errno!=EINTR))   
+		        {   
+		            printf("select error");   
+		        }   
+		             
+		        //If something happened on the master socket ,  
+		        //then its an incoming connection  
+		        if (FD_ISSET(master_socket, &readfds))   
+		        {   
+		            if ((new_socket = accept(master_socket,  
+		                    (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)   
+		            {   
+		                perror("accept");   
+		                exit(EXIT_FAILURE);   
+		            }   
+		             
+		            //inform user of socket number - used in send and receive commands  
+		            printf("New connection , socket fd is %d , ip is : %s , port : %d  \n" ,
+						new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));   
+		                 
+		            puts("Welcome message sent successfully");   
+		                 
+		            //add new socket to array of sockets  
+		               
+		            //if position is empty  
+		            if( client_socket == 0 )   
+		            {   
+		                client_socket = new_socket;   
+		                printf("Adding to list of sockets as %d\n" , i);  
+		            }
+		            break;      
+		        }   
+
+			    printf("before send...\n");
+	    		sendto(client_broadcast_socket, message, strlen(message), 0, (struct sockaddr*)&client_broadcast_address,
+	    			sizeof(client_broadcast_address));   
+	             
+	            printf("client broadcast message : %s : sent successfully\n", message);
+	            sleep(1);
+	        }
+            //close(client_broadcast_socket);
+            client_peer = 0;
+            state = 10;
+            close(client_broadcast_socket);
+            continue;        	
         }
         if (client_peer == 0){
 	        //clear the socket set  
