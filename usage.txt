@@ -1,0 +1,5 @@
+run client:
+./scli --server-broadcast-port 2222 --client-broadcast-port 1234 2355 ww y
+
+run server:
+./sserver --server-broadcast-port 2222 --client-broadcast-port 8880

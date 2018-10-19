@@ -108,6 +108,73 @@ void send_partner_info(Request* src, int dest){
     
     send(dest, buffer, size, 0);
 }
+
+int pair_requests(Request** requests, int* client_socket, int i, int sd){
+	int j;
+	if (requests[i]->mode == 0){
+	    for (j = 0; j < 30; ++j)
+	    {
+	    	if (requests[j] != NULL && requests[j]->mode == 1 && j != i && client_socket[j] != 0
+	    		&& strcmp(requests[j]->partner_name, requests[i]->name) == 0)
+	    	{
+	    		printf("hhhhhhhhhhhhhh1\n");
+	    		send_partner_info(requests[j], sd);
+	    		send(client_socket[j], "paired", 6, 0);
+	    		requests[i] = NULL;
+	    		requests[j] = NULL;
+	    		client_socket[i] = 0;
+	    		client_socket[j] = 0;
+	    		return 1;
+	    	}
+	    }
+
+	    for (j = 0; j < 30; ++j)
+	    {
+	    	if (requests[j] != NULL && requests[j]->mode == 0 && j != i && client_socket[j] != 0)
+	    	{
+	    		printf("hhhhhhhhhhhhhh\n");
+	    		send_partner_info(requests[j], sd);
+	    		send(client_socket[j], "paired", 6, 0);
+	    		requests[i] = NULL;
+	    		requests[j] = NULL;
+	    		client_socket[i] = 0;
+	    		client_socket[j] = 0;
+	    		return 1;
+	    	}
+	    }
+	} else {
+		for (j = 0; j < 30; ++j)
+	    {
+	    	if (j != i && client_socket[j] != 0 && requests[j] != NULL && requests[j]->mode == 0
+	    		&& strcmp(requests[j]->name, requests[i]->partner_name) == 0)
+	    	{
+	    		printf("kkkkkkkkkkkkkkkkkk\n");
+	    		send_partner_info(requests[i], client_socket[j]);
+	    		send(client_socket[i], "paired", 6, 0);
+	    		requests[i] = NULL;
+	    		requests[j] = NULL;
+	    		client_socket[i] = 0;
+	    		client_socket[j] = 0;
+	    		return 1;
+	    	}
+
+	    	if (j != i && client_socket[j] != 0 && requests[j] != NULL && requests[j]->mode == 1
+	    		&& strcmp(requests[j]->name, requests[i]->partner_name) == 0
+	    		&& strcmp(requests[j]->partner_name, requests[i]->name) == 0)
+	    	{
+	    		printf("kkkkkkkkkkkkkkkkkk1\n");
+	    		send_partner_info(requests[i], client_socket[j]);
+	    		send(client_socket[i], "paired", 6, 0);
+	    		requests[i] = NULL;
+	    		requests[j] = NULL;
+	    		client_socket[i] = 0;
+	    		client_socket[j] = 0;
+	    		return 1;
+	    	}
+	    }
+	}
+	return 0;
+}
      
 int main(int argc , char *argv[])   
 {   
@@ -124,9 +191,16 @@ int main(int argc , char *argv[])
          
     //set of socket descriptors  
     fd_set readfds, writefds;   
-         
+    
+    if (argc != 5 || strcmp(argv[1], "--server-broadcast-port") != 0
+    	|| strcmp(argv[3], "--client-broadcast-port") != 0)
+    {
+    	write(1, "usage: ./server --server-broadcast-port X --client-broadcast-port Y\n", 69);
+    	return 1;
+    }
     //a message  
-    char message[15] = "127.0.0.1 8880";   
+    char message[11] = "127.0.0.1 ";
+    strcat(message, argv[4]);   
      
     //initialise all client_socket[] to 0 so not checked  
     for (i = 0; i < max_clients; i++)   
@@ -171,7 +245,7 @@ int main(int argc , char *argv[])
     memset(&heart_beat_address, '0', sizeof(heart_beat_address)); 
     heart_beat_address.sin_family = AF_INET;
     heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
-    heart_beat_address.sin_port = htons( HEART_BEAT_PORT );
+    heart_beat_address.sin_port = htons(atoi(argv[2]));
     //bind the socket to localhost port 8888  
     if (bind(master_socket, (struct sockaddr *)&address, sizeof(address))<0)   
     {   
@@ -186,17 +260,7 @@ int main(int argc , char *argv[])
         perror("listen");   
         exit(EXIT_FAILURE);   
     }   
-    
-    // if (bind(heart_beat_socket, (struct sockaddr *)&heart_beat_address, sizeof(heart_beat_address))<0)   
-    // {   
-    //     perror("bind failed");   
-    //     exit(EXIT_FAILURE);   
-    // }
-    // if (listen(heart_beat_socket, 3) < 0)   
-    // {   
-    //     perror("listen");   
-    //     exit(EXIT_FAILURE);   
-    // }   
+       
     printf("Listener on port %d \n", HEART_BEAT_PORT);
 
     //accept the incoming connection  
@@ -252,13 +316,7 @@ int main(int argc , char *argv[])
 	             
 	            //inform user of socket number - used in send and receive commands  
 	            printf("New connection , socket fd is %d , ip is : %s , port : %d  \n" ,
-					new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));   
-	           
-	            //send new connection greeting message  
-	            // if( send(new_socket, message, strlen(message), 0) != strlen(message) )   
-	            // {   
-	            //     perror("send");   
-	            // }   
+					new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 	                 
 	            puts("Welcome message sent successfully");   
 	                 
@@ -308,52 +366,9 @@ int main(int argc , char *argv[])
 	                    //send(sd , buffer , strlen(buffer) , 0 );
 	                    requests[i] = extract_request(buffer, valread);
 	                    
-	                    int j;
-	                    if (requests[i]->mode == 0){
-		                    for (j = 0; j < 30; ++j)
-		                    {
-		                    	if (requests[j] != NULL && requests[j]->mode == 1 && j != i && client_socket[j] != 0
-		                    		&& strcmp(requests[j]->partner_name, requests[i]->name) == 0)
-		                    	{
-		                    		printf("hhhhhhhhhhhhhh1\n");
-		                    		send_partner_info(requests[j], sd);
-		                    		send(client_socket[j], "paired", 6, 0);
-		                    		requests[i] = NULL;
-		                    		requests[j] = NULL;
-		                    		client_socket[i] = 0;
-		                    		client_socket[j] = 0;
-		                    		break;
-		                    	}
-
-		                    	if (requests[j] != NULL && requests[j]->mode == 0 && j != i && client_socket[j] != 0)
-		                    	{
-		                    		printf("hhhhhhhhhhhhhh\n");
-		                    		send_partner_info(requests[j], sd);
-		                    		send(client_socket[j], "paired", 6, 0);
-		                    		requests[i] = NULL;
-		                    		requests[j] = NULL;
-		                    		client_socket[i] = 0;
-		                    		client_socket[j] = 0;
-		                    		break;
-		                    	}
-		                    }
-		                } else {
-		                	for (j = 0; j < 30; ++j)
-		                    {
-		                    	if (j != i && client_socket[j] != 0 && requests[j] != NULL
-		                    		&& strcmp(requests[j]->name, requests[i]->partner_name) == 0)
-		                    	{
-		                    		printf("kkkkkkkkkkkkkkkkkk\n");
-		                    		send_partner_info(requests[i], client_socket[j]);
-		                    		send(client_socket[i], "paired", 6, 0);
-		                    		requests[i] = NULL;
-		                    		requests[j] = NULL;
-		                    		client_socket[i] = 0;
-		                    		client_socket[j] = 0;
-		                    		break;
-		                    	}
-		                    }
-		                }
+	                    int status = pair_requests(requests, client_socket, i, sd);
+	                    if (status == 1)
+	                    	break;
 	                }   
 	            }   
 	        }

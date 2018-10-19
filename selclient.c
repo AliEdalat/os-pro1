@@ -150,8 +150,11 @@ void handle_game(int* state, int sd, int map[][10]){
 	    printf("%s\n", buffer);
 	    char res_message[5] ={'r', 'e', 's', ':', ' '};
 	    char win_message[9] ={'r', 'e', 's', ':', ' ', 'w', 'i', 'n', '\0'};
-	    if (mystrcmp(buffer, win_message, valread, 9, 9))
-	        return;
+	    if (mystrcmp(buffer, win_message, valread, 9, 9)){
+	        *state = 30;
+	        write(1, "win\n", 4);
+	    	return;
+	    }
 	    else if (mystrcmp(buffer, res_message, valread, 5, 5)){
 	        int res = extract_result(buffer);
 	        if (res){
@@ -175,6 +178,7 @@ void handle_game(int* state, int sd, int map[][10]){
 	        if (is_map_clear(map)){
 	            send(sd, win_message, 9, 0);
 	            write(1, "lost\n", 5);
+	            *state = 30;
 	            return;
 	        }
 	        else if (val){
@@ -220,6 +224,17 @@ void copy(char* recvString, char* buffer){
 	}
 	buffer[i] = '\0';
 }
+
+void create_server_message(int argc, char *argv[], char* message){
+	strcat(message, argv[5]);
+    strcat(message, " ");
+    strcat(message, argv[6]);
+    if (argc == 6)
+    {
+    	strcat(message, " ");
+    	strcat(message, argv[7]);
+    }
+}
  
 int main(int argc , char *argv[])   
 {   
@@ -236,20 +251,17 @@ int main(int argc , char *argv[])
     //set of socket descriptors  
     fd_set readfds;
     Partner* partner;
-    fetch_map(map, "map.txt");
-         
-    //a message  
-    char name[50] = {0};
-    char pname[50] = {0};
-    char message[11] = "127.0.0.1 ";
-    strcat(message, argv[3]);
-    strcat(message, " ");
-    strcat(message, argv[4]);
-    if (argc == 6)
+    fetch_map(map, "map2.txt");
+    
+    if ((argc != 7 && argc != 8) || strcmp(argv[1], "--server-broadcast-port") != 0
+    	|| strcmp(argv[3], "--client-broadcast-port") != 0)
     {
-    	strcat(message, " ");
-    	strcat(message, argv[5]);
+    	write(1, "usage: ./client --server-broadcast-port X --client-broadcast-port Y client_port client_name client_pname(optional)\n", 116);
+    	return 1;
     }
+    //a message
+    char message[11] = "127.0.0.1 ";
+    create_server_message(argc, argv, message);
 
     if( (heart_beat_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
     {   
@@ -270,7 +282,7 @@ int main(int argc , char *argv[])
     memset(&heart_beat_address, '0', sizeof(heart_beat_address)); 
     heart_beat_address.sin_family = AF_INET;
     heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
-    heart_beat_address.sin_port = htons(atoi(argv[1]));
+    heart_beat_address.sin_port = htons(atoi(argv[2]));
 
     if (bind(heart_beat_socket, (struct sockaddr *) &heart_beat_address, sizeof(heart_beat_address)) < 0){
         perror("bind() failed");   
@@ -336,7 +348,7 @@ int main(int argc , char *argv[])
     //type of socket created  
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;   
-    address.sin_port = htons(atoi(argv[3]));   
+    address.sin_port = htons(atoi(argv[5]));   
 
     //bind the socket to localhost port 8888  
     if (bind(master_socket, (struct sockaddr *)&address, sizeof(address))<0)   
@@ -344,7 +356,7 @@ int main(int argc , char *argv[])
         perror("bind failed");   
         exit(EXIT_FAILURE);   
     }   
-    printf("Listener on port %s \n", argv[3]);   
+    printf("Listener on port %s \n", argv[5]);   
          
     //try to specify maximum of 3 pending connections for the master socket  
     if (listen(master_socket, 3) < 0)   
@@ -361,6 +373,8 @@ int main(int argc , char *argv[])
     {
     	printf("state : %d\n", state);
     	if (state == 0) {
+    		char message[11] = "127.0.0.1 ";
+			create_server_message(argc, argv, message);    		
             send(sock, message, strlen(message), 0);
             state++;
             printf("send message :%s: to server!\n", message);
@@ -431,7 +445,7 @@ int main(int argc , char *argv[])
 		    memset(&client_broadcast_address, '0', sizeof(client_broadcast_address)); 
 		    client_broadcast_address.sin_family = AF_INET;
 		    client_broadcast_address.sin_addr.s_addr = INADDR_ANY;   
-		    client_broadcast_address.sin_port = htons(atoi(argv[2]));
+		    client_broadcast_address.sin_port = htons(atoi(argv[4]));
 
 		    if (bind(client_broadcast_socket, (struct sockaddr *) &client_broadcast_address,
 		    		sizeof(client_broadcast_address)) < 0){
@@ -482,12 +496,12 @@ int main(int argc , char *argv[])
 		    memset(&client_broadcast_address, '0', sizeof(client_broadcast_address)); 
 		    client_broadcast_address.sin_family = AF_INET;
 		    client_broadcast_address.sin_addr.s_addr = INADDR_ANY;   
-		    client_broadcast_address.sin_port = htons(atoi(argv[2]));
+		    client_broadcast_address.sin_port = htons(atoi(argv[4]));
 
 		    char message[11] = "127.0.0.1 ";
-		    strcat(message, argv[3]);
+		    strcat(message, argv[5]);
 		    strcat(message, " ");
-		    strcat(message, argv[4]);
+		    strcat(message, argv[6]);
 
 		    while(1){
 		    	//clear the socket set  
@@ -545,8 +559,70 @@ int main(int argc , char *argv[])
 		                printf("Adding to list of sockets as %d\n" , i);  
 		            }
 		            break;      
-		        }   
+		        } 
+		  //       if( (heart_beat_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
+			 //    {   
+			 //        perror("socket failed");   
+			 //        exit(EXIT_FAILURE);   
+			 //    }
 
+			 //    struct timeval tv;
+				// tv.tv_sec = 1;
+			 //    tv.tv_usec = 0;
+			 //    if (setsockopt(heart_beat_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
+			 //    {
+			 //       printf("Couldn't set socket timeout\n");
+			 //       return 0;
+			 //    }
+
+
+			 //    memset(&heart_beat_address, '0', sizeof(heart_beat_address)); 
+			 //    heart_beat_address.sin_family = AF_INET;
+			 //    heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
+			 //    heart_beat_address.sin_port = htons(atoi(argv[2]));
+
+			 //    if (bind(heart_beat_socket, (struct sockaddr *) &heart_beat_address, sizeof(heart_beat_address)) < 0){
+			 //        perror("bind() failed");   
+			 //        exit(EXIT_FAILURE);
+			 //    }
+		  //       int recvStringLen;
+			 //    char recvString[MAXRECVSTRING+1];
+			 //    /* Receive a single datagram from the server */
+			 //    if ((recvStringLen = recvfrom(heart_beat_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) >= 0){
+			 //       	write(1, "server is up!!!\n", 17);   
+			 //        //exit(EXIT_FAILURE);
+			 //        recvString[recvStringLen] = '\0';
+				//     printf("Received: %s\n", recvString);    /* Print the received string */
+
+				//     int port = extract_server_port(recvString);
+
+				//     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
+				//     { 
+				//         printf("\n Socket creation error \n"); 
+				//         return -1;
+				//     }
+
+				//     memset(&serv_addr, '0', sizeof(serv_addr)); 
+				   
+				//     serv_addr.sin_family = AF_INET; 
+				//     serv_addr.sin_addr.s_addr = INADDR_ANY;
+				//     serv_addr.sin_port = htons(port); 
+				 
+				   
+				//     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
+				//     { 
+				//         printf("\nConnection Failed \n"); 
+				//         return -1; 
+				//     }
+
+				//     printf("connect to %d\n", port);
+
+			 //        state = 0;
+			 //        client_peer = 0;
+			 //        close(heart_beat_socket);
+			 //        break;
+			 //    }  
+			 //    close(heart_beat_socket);
 			    printf("before send...\n");
 	    		sendto(client_broadcast_socket, message, strlen(message), 0, (struct sockaddr*)&client_broadcast_address,
 	    			sizeof(client_broadcast_address));   
@@ -555,6 +631,10 @@ int main(int argc , char *argv[])
 	            sleep(1);
 	        }
             //close(client_broadcast_socket);
+            if (state == 0)
+            {
+            	continue;
+            }
             client_peer = 0;
             state = 10;
             close(client_broadcast_socket);
@@ -694,8 +774,11 @@ int main(int argc , char *argv[])
 		            }
 		        }      
 	        }
-	    } else
+	    } else{
 	    	handle_game(&state, sock2, map);
+	    	if (state == 30)
+	    		break;
+	    }
     }     
     return 0;   
 }   
