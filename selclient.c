@@ -227,7 +227,7 @@ void create_server_message(int argc, char *argv[], char* message){
 	strcat(message, argv[5]);
     strcat(message, " ");
     strcat(message, argv[6]);
-    if (argc == 6)
+    if (argc == 8)
     {
     	strcat(message, " ");
     	strcat(message, argv[7]);
@@ -364,7 +364,7 @@ int main(int argc , char *argv[])
     //set of socket descriptors  
     fd_set readfds;
     Partner* partner;
-    fetch_map(map, "map2.txt");
+    fetch_map(map, "map.txt");
     
     if ((argc != 7 && argc != 8) || strcmp(argv[1], "--server-broadcast-port") != 0
     	|| strcmp(argv[3], "--client-broadcast-port") != 0)
@@ -614,74 +614,16 @@ int main(int argc , char *argv[])
 		    strcat(message, argv[5]);
 		    strcat(message, " ");
 		    strcat(message, argv[6]);
+		    if (argc == 8)
+		    {
+		    	strcat(message, " ");
+		    	strcat(message, argv[7]);
+		    }
 
 		    while(1){
 		    	if (handle_response_of_client_request(master_socket, &client_socket, &addrlen, &readfds, &address, &tv))
 		    		break;
-		  //       if( (heart_beat_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
-			 //    {   
-			 //        perror("socket failed");   
-			 //        exit(EXIT_FAILURE);   
-			 //    }
-
-			 //    struct timeval tv;
-				// tv.tv_sec = 1;
-			 //    tv.tv_usec = 0;
-			 //    if (setsockopt(heart_beat_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
-			 //    {
-			 //       printf("Couldn't set socket timeout\n");
-			 //       return 0;
-			 //    }
-
-
-			 //    memset(&heart_beat_address, '0', sizeof(heart_beat_address)); 
-			 //    heart_beat_address.sin_family = AF_INET;
-			 //    heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
-			 //    heart_beat_address.sin_port = htons(atoi(argv[2]));
-
-			 //    if (bind(heart_beat_socket, (struct sockaddr *) &heart_beat_address, sizeof(heart_beat_address)) < 0){
-			 //        perror("bind() failed");   
-			 //        exit(EXIT_FAILURE);
-			 //    }
-		  //       int recvStringLen;
-			 //    char recvString[MAXRECVSTRING+1];
-			 //    /* Receive a single datagram from the server */
-			 //    if ((recvStringLen = recvfrom(heart_beat_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) >= 0){
-			 //       	write(1, "server is up!!!\n", 17);   
-			 //        //exit(EXIT_FAILURE);
-			 //        recvString[recvStringLen] = '\0';
-				//     printf("Received: %s\n", recvString);    /* Print the received string */
-
-				//     int port = extract_server_port(recvString);
-
-				//     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-				//     { 
-				//         printf("\n Socket creation error \n"); 
-				//         return -1;
-				//     }
-
-				//     memset(&serv_addr, '0', sizeof(serv_addr)); 
-				   
-				//     serv_addr.sin_family = AF_INET; 
-				//     serv_addr.sin_addr.s_addr = INADDR_ANY;
-				//     serv_addr.sin_port = htons(port); 
-				 
-				   
-				//     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
-				//     { 
-				//         printf("\nConnection Failed \n"); 
-				//         return -1; 
-				//     }
-
-				//     printf("connect to %d\n", port);
-
-			 //        state = 0;
-			 //        client_peer = 0;
-			 //        close(heart_beat_socket);
-			 //        break;
-			 //    }  
-			 //    close(heart_beat_socket);
-			    //printf("before send...\n");
+		  
 	    		sendto(client_broadcast_socket, message, strlen(message), 0, (struct sockaddr*)&client_broadcast_address,
 	    			sizeof(client_broadcast_address));   
 	             
