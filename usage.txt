@@ -1,5 +1,5 @@
 run client:
-./scli --server-broadcast-port 2222 --client-broadcast-port 1234 2355 ww y
+./client --server-broadcast-port 2222 --client-broadcast-port 1234 client_listener_port client_name name_of_client_friend
 
 run server:
-./sserver --server-broadcast-port 2222 --client-broadcast-port 8880
+./server --server-broadcast-port 2222 --client-broadcast-port(port that server listen to is this) 8880

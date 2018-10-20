@@ -129,14 +129,12 @@ void fetch_map(int map[][10], char* file_name){
 
 void select_room(int* state, int sd){	
     char input[4];
-    printf("select select_room\n");
     write(1, "select :\n", 9);
-    
     read(0, input, 4);
-    printf("input : %s\n", input);
     char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
     send(sd, message, 9, 0);
-    (*state)++;
+    write(1, "select message has been sent!\n", 30);
+    *state = 4;
 }
 
 void handle_game(int* state, int sd, int map[][10]){
@@ -145,9 +143,10 @@ void handle_game(int* state, int sd, int map[][10]){
 	if (*state == 3) {
 	    select_room(state, sd);
 	} else if (*state == 4) {
-	    // char buffer[1024] = {0};
-	    valread = read(sd, buffer, 1024); 
-	    printf("%s\n", buffer);
+	    valread = read(sd, buffer, 1024);
+	    write(1, "received : ", 11);
+        write(1, buffer, valread);
+        write(1, "\n", 1);
 	    char res_message[5] ={'r', 'e', 's', ':', ' '};
 	    char win_message[9] ={'r', 'e', 's', ':', ' ', 'w', 'i', 'n', '\0'};
 	    if (mystrcmp(buffer, win_message, valread, 9, 9)){
@@ -157,17 +156,14 @@ void handle_game(int* state, int sd, int map[][10]){
 	    }
 	    else if (mystrcmp(buffer, res_message, valread, 5, 5)){
 	        int res = extract_result(buffer);
-	        if (res){
-	            *state = 3;
+	        if (res)
 	        	select_room(state, sd);
-	        }
 	        else
 	            *state = 5;
 	    }
 	} else if (*state == 5) {
-	    //char buffer[1024] = {0};
-	    valread = read(sd, buffer, 1024); 
-	    printf("%s\n",buffer );
+		write(1, "wait for your friend's selection...\n", 36);
+	    valread = read(sd, buffer, 1024);
 	    char sel_text[5] = {'s', 'e', 'l', ':', ' '};
 	    char zero_message[7] ={'r', 'e', 's', ':', ' ', '0', '\0'};
 	    char one_message[7] ={'r', 'e', 's', ':', ' ', '1', '\0'};
@@ -179,15 +175,17 @@ void handle_game(int* state, int sd, int map[][10]){
 	            send(sd, win_message, 9, 0);
 	            write(1, "lost\n", 5);
 	            *state = 30;
+	            write(1, "response message has been sent!\n", 32);
 	            return;
 	        }
 	        else if (val){
 	            send(sd, one_message, 7, 0);
 	            *state = 5;
+	            write(1, "response message has been sent!\n", 32);
 	        }
 	        else{
 	            send(sd, zero_message, 7, 0);
-	            *state = 3;
+	            write(1, "response message has been sent!\n", 32);
 	            select_room(state, sd);
 	        }
 	    }
@@ -235,7 +233,122 @@ void create_server_message(int argc, char *argv[], char* message){
     	strcat(message, argv[7]);
     }
 }
+
+void handle_server_side_of_game(char* buffer, int valread, int* state, int sd, int map[][10]){
+	char sel_text[5] = {'s', 'e', 'l', ':', ' '};
+    if (mystrcmp(buffer, sel_text, valread, 5, 5) && *state == 10)
+    	*state = 5;
+    if (*state == 3) {
+        char input[4];
+		write(1, "select :\n", 9);
+		read(0, input, 4);
+        char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
+        send(sd, message, 9, 0);
+        write(1, "select message has been sent!\n", 30);
+        *state++;
+    } else if (*state == 4) {
+    	write(1, "received : ", 11);
+        write(1, buffer, valread);
+        write(1, "\n", 1);
+        char res_message[5] ={'r', 'e', 's', ':', ' '};
+        char win_message[9] ={'r', 'e', 's', ':', ' ', 'w', 'i', 'n', '\0'};
+        if (mystrcmp(buffer, win_message, valread, 9, 9)){
+            *state = 30;
+	        return;
+	    } else if (mystrcmp(buffer, res_message, valread, 5, 5)){
+            int res = extract_result(buffer);
+            if (res){
+            	select_room(state, sd);
+            }
+            else
+                *state = 5;
+        }
+    } else if (*state == 5) {
+        char sel_text[5] = {'s', 'e', 'l', ':', ' '};
+        char zero_message[7] ={'r', 'e', 's', ':', ' ', '0', '\0'};
+        char one_message[7] ={'r', 'e', 's', ':', ' ', '1', '\0'};
+        char win_message[9] ={'r', 'e', 's', ':', ' ', 'w', 'i', 'n', '\0'};
+        if (mystrcmp(buffer, sel_text, valread, 5, 5)){
+            int val = extract_sel(buffer, map);
+            if (is_map_clear(map)){
+                send(sd, win_message, 9, 0);
+                write(1, "lost\n", 5);
+                *state = 30;
+                write(1, "response message has been sent!\n", 32);
+	            return;
+            }
+            else if (val){
+                send(sd, one_message, 7, 0);
+                *state = 5;
+                write(1, "response message has been sent!\n", 32);
+            }
+            else{
+                send(sd, zero_message, 7, 0);
+                write(1, "response message has been sent!\n", 32);
+                select_room(state, sd);
+            }
+        }
+    }	
+}
+
+int handle_response_of_client_request(int master_socket, int* client_socket, int* addrlen, fd_set* readfds,
+	struct sockaddr_in* address, struct timeval* tv){
+	int new_socket, max_sd, sd, activity;
+	//clear the socket set  
+    FD_ZERO(readfds);   
  
+    //add master socket to set  
+    FD_SET(master_socket, readfds);   
+    max_sd = master_socket;   
+         
+    //add child sockets to set     
+    //socket descriptor  
+    sd = *client_socket;   
+         
+    //if valid socket descriptor then add to read list  
+    if(sd > 0)   
+        FD_SET(sd , readfds);   
+         
+    //highest file descriptor number, need it for the select function  
+    if(sd > max_sd)   
+        max_sd = sd;
+ 
+    //wait for an activity on one of the sockets , timeout is NULL ,  
+    //so wait indefinitely
+    activity = select( max_sd + 1 , readfds , NULL , NULL , tv);   
+   
+    if ((activity < 0) && (errno!=EINTR))   
+    {   
+        printf("select error");   
+    }   
+         
+    //If something happened on the master socket ,  
+    //then its an incoming connection  
+    if (FD_ISSET(master_socket, readfds))   
+    {   
+        if ((new_socket = accept(master_socket,  
+                (struct sockaddr *)address, (socklen_t*)addrlen))<0)   
+        {   
+            perror("accept");   
+            exit(EXIT_FAILURE);   
+        }   
+         
+        //inform user of socket number - used in send and receive commands  
+        printf("New connection , socket fd is %d , ip is : %s , port : %d  \n" ,
+			new_socket , inet_ntoa(address->sin_addr) , ntohs(address->sin_port));   
+             
+        //add new socket
+        //if position is empty  
+        if( *client_socket == 0 )   
+        {   
+            *client_socket = new_socket;   
+            printf("Adding to list of sockets as %d\n" , 0);  
+        }
+        return 1;      
+    }
+    return 0;
+}
+
 int main(int argc , char *argv[])   
 {   
 	int map[10][10];
@@ -417,11 +530,10 @@ int main(int argc , char *argv[])
 		    printf("connect to %d\n", atoi(partner->port));
             char input[4];
             write(1, "select :\n", 9);
-            printf("read : \n");
             read(0, input, 4);
             char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
-            printf("befor send sel...\n");
             send(sock2, message, 9, 0);
+            write(1, "select message has been sent!\n", 30);
             state = 4;
             continue;
         } else if (state == 20) {
@@ -504,62 +616,8 @@ int main(int argc , char *argv[])
 		    strcat(message, argv[6]);
 
 		    while(1){
-		    	//clear the socket set  
-		        FD_ZERO(&readfds);   
-		     
-		        //add master socket to set  
-		        FD_SET(master_socket, &readfds);   
-		        max_sd = master_socket;   
-		             
-		        //add child sockets to set     
-		        //socket descriptor  
-		        sd = client_socket;   
-		             
-		        //if valid socket descriptor then add to read list  
-		        if(sd > 0)   
-		            FD_SET( sd , &readfds);   
-		             
-		        //highest file descriptor number, need it for the select function  
-		        if(sd > max_sd)   
-		            max_sd = sd;
-		     
-		        //wait for an activity on one of the sockets , timeout is NULL ,  
-		        //so wait indefinitely
-		        printf("befor select ...\n");
-		        activity = select( max_sd + 1 , &readfds , NULL , NULL , &tv);   
-		       
-		        if ((activity < 0) && (errno!=EINTR))   
-		        {   
-		            printf("select error");   
-		        }   
-		             
-		        //If something happened on the master socket ,  
-		        //then its an incoming connection  
-		        if (FD_ISSET(master_socket, &readfds))   
-		        {   
-		            if ((new_socket = accept(master_socket,  
-		                    (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)   
-		            {   
-		                perror("accept");   
-		                exit(EXIT_FAILURE);   
-		            }   
-		             
-		            //inform user of socket number - used in send and receive commands  
-		            printf("New connection , socket fd is %d , ip is : %s , port : %d  \n" ,
-						new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));   
-		                 
-		            puts("Welcome message sent successfully");   
-		                 
-		            //add new socket to array of sockets  
-		               
-		            //if position is empty  
-		            if( client_socket == 0 )   
-		            {   
-		                client_socket = new_socket;   
-		                printf("Adding to list of sockets as %d\n" , i);  
-		            }
-		            break;      
-		        } 
+		    	if (handle_response_of_client_request(master_socket, &client_socket, &addrlen, &readfds, &address, &tv))
+		    		break;
 		  //       if( (heart_beat_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
 			 //    {   
 			 //        perror("socket failed");   
@@ -623,7 +681,7 @@ int main(int argc , char *argv[])
 			 //        break;
 			 //    }  
 			 //    close(heart_beat_socket);
-			    printf("before send...\n");
+			    //printf("before send...\n");
 	    		sendto(client_broadcast_socket, message, strlen(message), 0, (struct sockaddr*)&client_broadcast_address,
 	    			sizeof(client_broadcast_address));   
 	             
@@ -662,7 +720,8 @@ int main(int argc , char *argv[])
 	     
 	        //wait for an activity on one of the sockets , timeout is NULL ,  
 	        //so wait indefinitely
-	        printf("befor select ...\n");
+	        if (state == 5 || state == 10)
+	        	write(1, "wait for your friend's selection...\n", 36);
 	        activity = select( max_sd + 1 , &readfds , NULL , NULL , NULL);   
 	       
 	        if ((activity < 0) && (errno!=EINTR))   
@@ -675,7 +734,7 @@ int main(int argc , char *argv[])
 	        if (FD_ISSET(master_socket, &readfds))   
 	        {   
 	            if ((new_socket = accept(master_socket,  
-	                    (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)   
+	                    (struct sockaddr *)&address, (socklen_t*)&addrlen))<0)
 	            {   
 	                perror("accept");   
 	                exit(EXIT_FAILURE);   
@@ -685,10 +744,7 @@ int main(int argc , char *argv[])
 	            printf("New connection , socket fd is %d , ip is : %s , port : %d  \n" ,
 					new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));   
 	                 
-	            puts("Welcome message sent successfully");   
-	                 
-	            //add new socket to array of sockets  
-	               
+	            //add new socket
 	            //if position is empty  
 	            if( client_socket == 0 )   
 	            {   
@@ -716,63 +772,9 @@ int main(int argc , char *argv[])
 	                close( sd );   
 	                client_socket = 0;   
 	            }
-	            char sel_text[5] = {'s', 'e', 'l', ':', ' '};
-	            printf("%s\n", buffer); 
-	            if (mystrcmp(buffer, sel_text, valread, 5, 5) && state == 10)
-	            	state = 5;
-	            if (state == 3) {
-		            char input[4];
-		            printf("i%d\n", map[2][2]);
-	    			write(1, "select :\n", 9);
-	    
-	    			read(0, input, 4);
-	    			printf("input : %s\n", input);
-		            char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
-		            send(sd, message, 9, 0);
-		            state++;
-		        } else if (state == 4) {
-		            // char buffer[1024] = {0};
-		            // valread = read( sock, buffer, 1024); 
-		            printf("%s\n", buffer);
-		            char res_message[5] ={'r', 'e', 's', ':', ' '};
-		            char win_message[9] ={'r', 'e', 's', ':', ' ', 'w', 'i', 'n', '\0'};
-		            if (mystrcmp(buffer, win_message, valread, 9, 9))
-		                break;
-		            else if (mystrcmp(buffer, res_message, valread, 5, 5)){
-		                int res = extract_result(buffer);
-		                if (res){
-		                    state = 3;
-		                	select_room(&state, sd);
-		                }
-		                else
-		                    state = 5;
-		            }
-		        } else if (state == 5) {
-		            //char buffer[1024] = {0};
-		            // valread = read( sock , buffer, 1024); 
-		            printf("%s\n",buffer );
-		            char sel_text[5] = {'s', 'e', 'l', ':', ' '};
-		            char zero_message[7] ={'r', 'e', 's', ':', ' ', '0', '\0'};
-		            char one_message[7] ={'r', 'e', 's', ':', ' ', '1', '\0'};
-		            char win_message[9] ={'r', 'e', 's', ':', ' ', 'w', 'i', 'n', '\0'};
-		            if (mystrcmp(buffer, sel_text, valread, 5, 5)){
-		                int val = extract_sel(buffer, map);
-		                if (is_map_clear(map)){
-		                    send(sd, win_message, 9, 0);
-		                    write(1, "lost\n", 5);
-		                    break;
-		                }
-		                else if (val){
-		                    send(sd, one_message, 7, 0);
-		                    state = 5;
-		                }
-		                else{
-		                    send(sd, zero_message, 7, 0);
-		                    state = 3;
-		                    select_room(&state, sd);
-		                }
-		            }
-		        }      
+				handle_server_side_of_game(buffer, valread, &state, sd, map);
+				if (state == 30)
+	    			break;	                  
 	        }
 	    } else{
 	    	handle_game(&state, sock2, map);
