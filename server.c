@@ -261,7 +261,7 @@ int main(int argc , char *argv[])
         exit(EXIT_FAILURE);   
     }   
        
-    printf("Listener on port %d \n", HEART_BEAT_PORT);
+    //printf("Listener on port %d \n", HEART_BEAT_PORT);
 
     //accept the incoming connection  
     addrlen = sizeof(address);
