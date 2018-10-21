@@ -131,6 +131,11 @@ void select_room(int* state, int sd){
     char input[4];
     write(1, "select :\n", 9);
     read(0, input, 4);
+    if ('0' > input[0] || '9' < input[0] || '0' > input[2] || '9' < input[2] || input[1] != ' ' || input[3] != '\n'){
+    	*state = 3;
+    	write(1, "input is invalid!!\n", 19);
+    	return;
+    }
     char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
     send(sd, message, 9, 0);
     write(1, "select message has been sent!\n", 30);
@@ -239,13 +244,7 @@ void handle_server_side_of_game(char* buffer, int valread, int* state, int sd, i
     if (mystrcmp(buffer, sel_text, valread, 5, 5) && *state == 10)
     	*state = 5;
     if (*state == 3) {
-        char input[4];
-		write(1, "select :\n", 9);
-		read(0, input, 4);
-        char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
-        send(sd, message, 9, 0);
-        write(1, "select message has been sent!\n", 30);
-        *state++;
+        select_room(state, sd);
     } else if (*state == 4) {
     	write(1, "received : ", 11);
         write(1, buffer, valread);
@@ -406,7 +405,7 @@ int main(int argc , char *argv[])
     char recvString[MAXRECVSTRING+1];
     /* Receive a single datagram from the server */
     if ((recvStringLen = recvfrom(heart_beat_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) < 0){
-        perror("recvfrom() broadcast port of server has been failed!!!");   
+        printf("recvfrom() broadcast port of server has been failed!!!\n");   
         //exit(EXIT_FAILURE);
         state = 20;
         close(heart_beat_socket);
@@ -528,13 +527,7 @@ int main(int argc , char *argv[])
 		    }
 		    client_peer = 1;
 		    printf("connect to %d\n", atoi(partner->port));
-            char input[4];
-            write(1, "select :\n", 9);
-            read(0, input, 4);
-            char message[9] ={'s', 'e', 'l', ':', ' ', input[0], input[1], input[2], '\0'};
-            send(sock2, message, 9, 0);
-            write(1, "select message has been sent!\n", 30);
-            state = 4;
+            select_room(&state, sock2);
             continue;
         } else if (state == 20) {
         	int client_broadcast_socket;
@@ -569,7 +562,7 @@ int main(int argc , char *argv[])
 		    char recvString[MAXRECVSTRING+1];
 		    /* Receive a single datagram from the server */
 		    if ((recvStringLen = recvfrom(client_broadcast_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) < 0){
-		        perror("recvfrom() broadcast port of client has been failed!!!");   
+		        printf("recvfrom() broadcast port of client has been failed!!!\n");   
 		        //exit(EXIT_FAILURE);
 		        state = 21;
 		        close(client_broadcast_socket);
