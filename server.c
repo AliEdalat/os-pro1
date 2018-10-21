@@ -240,7 +240,7 @@ int main(int argc , char *argv[])
     //type of socket created  
     address.sin_family = AF_INET;   
     address.sin_addr.s_addr = INADDR_ANY;   
-    address.sin_port = htons( PORT );   
+    address.sin_port = htons( atoi(argv[4]) );   
          
     memset(&heart_beat_address, '0', sizeof(heart_beat_address)); 
     heart_beat_address.sin_family = AF_INET;
@@ -252,7 +252,7 @@ int main(int argc , char *argv[])
         perror("bind failed");   
         exit(EXIT_FAILURE);   
     }   
-    printf("Listener on port %d \n", PORT);   
+    printf("Listener on port %d \n", atoi(argv[2]));   
          
     //try to specify maximum of 3 pending connections for the master socket  
     if (listen(master_socket, 3) < 0)   

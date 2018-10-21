@@ -149,6 +149,11 @@ void handle_game(int* state, int sd, int map[][10]){
 	    select_room(state, sd);
 	} else if (*state == 4) {
 	    valread = read(sd, buffer, 1024);
+	    if (valread <= 0)
+	    {
+	    	*state = 20;
+	    	return;
+	    }
 	    write(1, "received : ", 11);
         write(1, buffer, valread);
         write(1, "\n", 1);
@@ -169,6 +174,11 @@ void handle_game(int* state, int sd, int map[][10]){
 	} else if (*state == 5) {
 		write(1, "wait for your friend's selection...\n", 36);
 	    valread = read(sd, buffer, 1024);
+	    if (valread <= 0)
+	    {
+	    	*state = 20;
+	    	return;
+	    }
 	    char sel_text[5] = {'s', 'e', 'l', ':', ' '};
 	    char zero_message[7] ={'r', 'e', 's', ':', ' ', '0', '\0'};
 	    char one_message[7] ={'r', 'e', 's', ':', ' ', '1', '\0'};
@@ -492,7 +502,13 @@ int main(int argc , char *argv[])
             printf("send message :%s: to server!\n", message);
             continue;
         } else if (state == 1) {
+        	write(1, "wait for server response...\n", 28);
             valread = read(sock, buffer, 1024);
+            if (valread <= 0)
+            {
+            	state = 20;
+            	continue;
+            }
             printf("%s\n",buffer );
             char partner_text[10] = "partner: ";
             char paired_text[7] = "paired";
@@ -706,6 +722,11 @@ int main(int argc , char *argv[])
 	                //Close the socket and mark as 0 in list for reuse  
 	                close( sd );   
 	                client_socket = 0;   
+	            }
+	            if (valread <= 0)
+	            {
+	            	state = 20;
+	            	continue;
 	            }
 				handle_server_side_of_game(buffer, valread, &state, sd, map);
 				if (state == 30)
