@@ -367,13 +367,13 @@ void handle_client_to_server_connection(int* state, int* sock2, int* valread, in
         	*state = 20;
         	return;
         }
-        printf("%s\n",buffer );
+        //printf("%s\n",buffer );
         char partner_text[10] = "partner: ";
         char paired_text[7] = "paired";
         if (mystrcmp(buffer, partner_text, *valread, 9, 9))
-            *state++;
+            (*state)++;
         else if (mystrcmp(buffer, paired_text, *valread, 6, 6))
-        	*state = 10;
+        	(*state) = 10;
         // else if (mystrcmp(buffer, sel_text, 1024, 5, 5))
         //     state = 5;
         return;
