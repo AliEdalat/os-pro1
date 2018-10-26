@@ -142,7 +142,88 @@ void select_room(int* state, int sd){
     *state = 4;
 }
 
-void handle_game(int* state, int sd, int map[][10]){
+int extract_server_port(char recv_string[255], int size){
+	int i, j = 0;
+    int state = 0;
+    char port_string[255];
+    for (i = 10; i < size; ++i)
+    {
+        port_string[j++] = recv_string[i];
+    }
+    port_string[j] = '\0';
+    printf("port : %d\n", atoi(port_string));
+    return atoi(port_string);	
+}
+
+void start_again(int map[][10], int* sock, int* state, char *argv[]){
+	int heart_beat_socket;
+	struct sockaddr_in serv_addr, heart_beat_address;
+	fetch_map(map, "map.txt");
+    if((heart_beat_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
+    {   
+        perror("socket failed");   
+        exit(EXIT_FAILURE);   
+    }
+
+    struct timeval tv;
+	tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    if (setsockopt(heart_beat_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
+    {
+       printf("Couldn't set socket timeout\n");
+       exit(EXIT_FAILURE);
+    }
+
+    memset(&heart_beat_address, '0', sizeof(heart_beat_address)); 
+    heart_beat_address.sin_family = AF_INET;
+    heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
+    heart_beat_address.sin_port = htons(atoi(argv[2]));
+
+    if (bind(heart_beat_socket, (struct sockaddr *) &heart_beat_address, sizeof(heart_beat_address)) < 0){
+        perror("bind() failed");   
+        exit(EXIT_FAILURE);
+    }
+
+    int recvStringLen;
+    char recvString[MAXRECVSTRING+1];
+    /* Receive a single datagram from the server */
+    if ((recvStringLen = recvfrom(heart_beat_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) < 0){
+        printf("recvfrom() broadcast port of server has been failed!!!\n");   
+        //exit(EXIT_FAILURE);
+        *state = 20;
+        close(heart_beat_socket);
+    }
+
+    recvString[recvStringLen] = '\0';
+    printf("Received: %s\n", recvString);    /* Print the received string */
+    close(heart_beat_socket);
+
+    int port = extract_server_port(recvString, recvStringLen);
+
+    if ((*sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
+    { 
+        printf("\n Socket creation error \n"); 
+        exit(EXIT_FAILURE);
+    }
+
+    memset(&serv_addr, '0', sizeof(serv_addr)); 
+   
+    serv_addr.sin_family = AF_INET; 
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    serv_addr.sin_port = htons(port); 
+ 
+   
+    if (connect(*sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
+    { 
+        printf("\nConnection Failed \n"); 
+        *state = 20;
+        return; 
+    }
+
+    printf("connect to %d\n", port);
+}
+
+void handle_game(int* state, int sd, int map[][10], char *argv[], int* sock){
 	char buffer[1024] = {0};
 	int valread;
 	if (*state == 3) {
@@ -151,7 +232,9 @@ void handle_game(int* state, int sd, int map[][10]){
 	    valread = read(sd, buffer, 1024);
 	    if (valread <= 0)
 	    {
-	    	*state = 20;
+	    	*state = 0;
+	    	write(1, "your friend is disconnected!!!\n", 31);
+	    	start_again(map, sock, state, argv);
 	    	return;
 	    }
 	    write(1, "received : ", 11);
@@ -176,7 +259,9 @@ void handle_game(int* state, int sd, int map[][10]){
 	    valread = read(sd, buffer, 1024);
 	    if (valread <= 0)
 	    {
-	    	*state = 20;
+	    	*state = 0;
+	    	write(1, "your friend is disconnected!!!\n", 31);
+	    	start_again(map, sock, state, argv);
 	    	return;
 	    }
 	    char sel_text[5] = {'s', 'e', 'l', ':', ' '};
@@ -185,7 +270,6 @@ void handle_game(int* state, int sd, int map[][10]){
 	    char win_message[9] ={'r', 'e', 's', ':', ' ', 'w', 'i', 'n', '\0'};
 	    if (mystrcmp(buffer, sel_text, valread, 5, 5)){
 	        int val = extract_sel(buffer, map);
-	        // printf("val %d\n", val);
 	        if (is_map_clear(map)){
 	            send(sd, win_message, 9, 0);
 	            write(1, "lost\n", 5);
@@ -205,20 +289,6 @@ void handle_game(int* state, int sd, int map[][10]){
 	        }
 	    }
 	}
-}
-
-int extract_server_port(char recv_string[255], int size){
-	int i, j = 0;
-	printf("%s\n", recv_string);
-    int state = 0;
-    char port_string[255];
-    for (i = 10; i < size; ++i)
-    {
-        port_string[j++] = recv_string[i];
-    }
-    port_string[j] = '\0';
-    printf("port : %d\n", atoi(port_string));
-    return atoi(port_string);	
 }
 
 void copy(char* recvString, char* buffer){
@@ -320,7 +390,7 @@ int handle_response_of_client_request(int master_socket, int* client_socket, int
    
     if ((activity < 0) && (errno!=EINTR))   
     {   
-        printf("select error");   
+        write(2, "select error\n", 13);   
     }   
          
     //If something happened on the master socket ,  
@@ -343,7 +413,7 @@ int handle_response_of_client_request(int master_socket, int* client_socket, int
         if( *client_socket == 0 )   
         {   
             *client_socket = new_socket;   
-            printf("Adding to list of sockets as %d\n" , 0);  
+            write(1, "Adding to list of sockets\n", 26);  
         }
         return 1;      
     }
@@ -355,7 +425,11 @@ void handle_client_to_server_connection(int* state, int* sock2, int* valread, in
 	if (*state == 0) {
 		char message[11] = "127.0.0.1 ";
 		create_server_message(argc, argv, message);    		
-        send(sock, message, strlen(message), 0);
+        if (send(sock, message, strlen(message), 0) < 0){
+        	write(1, "server is down!!!\n", 18);
+        	*state = 20;
+        	return;
+        }
         (*state)++;
         printf("send message :%s: to server!\n", message);
         return;
@@ -364,23 +438,21 @@ void handle_client_to_server_connection(int* state, int* sock2, int* valread, in
         *valread = read(sock, buffer, 1024);
         if (*valread <= 0)
         {
+        	write(1, "server is down!!!\n", 18);
         	*state = 20;
         	return;
         }
-        //printf("%s\n",buffer );
         char partner_text[10] = "partner: ";
         char paired_text[7] = "paired";
         if (mystrcmp(buffer, partner_text, *valread, 9, 9))
             (*state)++;
         else if (mystrcmp(buffer, paired_text, *valread, 6, 6))
         	(*state) = 10;
-        // else if (mystrcmp(buffer, sel_text, 1024, 5, 5))
-        //     state = 5;
         return;
     } else if (*state == 2) {
         partner = extract_partner(buffer, *valread);
         char buffer[1024] = {0};
-        // close(sock);
+
         if ((*sock2 = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
 	    { 
 	        printf("\n Socket creation error \n"); 
@@ -406,83 +478,18 @@ void handle_client_to_server_connection(int* state, int* sock2, int* valread, in
     }
 }
 
-int handle_server_status(char *argv[], int* sock, int* state, int* client_peer, struct sockaddr_in* serv_addr){
-	int heart_beat_socket, opt = 1;
-	struct sockaddr_in heart_beat_address;
-	if( (heart_beat_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == 0)   
-    {   
-        perror("socket failed");   
-        return 0;
-    }
-
-    struct timeval tv;
-	tv.tv_sec = 1;
-    tv.tv_usec = 0;
-    if (setsockopt(heart_beat_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
-    {
-       printf("Couldn't set socket timeout\n");
-       return 0;
-    }
-
-    if (setsockopt(heart_beat_socket, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt)) < 0)
-    {
-       printf("Couldn't set socket SO_REUSEADDR\n");
-       return 0;
-    }
-
-
-    memset(&heart_beat_address, '0', sizeof(heart_beat_address)); 
-    heart_beat_address.sin_family = AF_INET;
-    heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
-    heart_beat_address.sin_port = htons(atoi(argv[2]));
-
-    if (bind(heart_beat_socket, (struct sockaddr *) &heart_beat_address, sizeof(heart_beat_address)) < 0){
-        perror("bind() failed");   
-        return 0;
-    }
-    int recvStringLen;
-    char recvString[MAXRECVSTRING+1];
-    /* Receive a single datagram from the server */
-    if ((recvStringLen = recvfrom(heart_beat_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) >= 0){
-       	write(1, "server is up!!!\n", 17);   
-        //exit(EXIT_FAILURE);
-        recvString[recvStringLen] = '\0';
-	    printf("Received: %s\n", recvString);    /* Print the received string */
-
-	    int port = extract_server_port(recvString, recvStringLen);
-
-	    if ((*sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-	    { 
-	        printf("\n Socket creation error \n"); 
-	        return -1;
-	    }
-
-	    memset(serv_addr, '0', sizeof(*serv_addr)); 
-	   
-	    serv_addr->sin_family = AF_INET; 
-	    serv_addr->sin_addr.s_addr = INADDR_ANY;
-	    serv_addr->sin_port = htons(port); 
-	 
-	   
-	    if (connect(*sock, (struct sockaddr *)serv_addr, sizeof(*serv_addr)) < 0) 
-	    { 
-	        printf("\nConnection Failed \n"); 
-	        return -1; 
-	    }
-
-	    printf("connect to %d\n", port);
-
-        *state = 0;
-        *client_peer = 0;
-        close(heart_beat_socket);
-        return 1;
-    }  
-    close(heart_beat_socket);
-    return 0;
+int handle_server_status(char *argv[], int* sock, int* state, int* client_peer, int map[][10]){
+	*state = 0;
+	*client_peer = 0;
+	start_again(map, sock, state, argv);
+	if(*state == 0)
+		return 1;
+	return 0;
 }
 
 int main(int argc , char *argv[])   
 {   
+	START : ;
 	int map[10][10];
     int opt = TRUE;
     int opt_write = TRUE;   
@@ -708,8 +715,8 @@ int main(int argc , char *argv[])
 		    while(1){
 		    	if (handle_response_of_client_request(master_socket, &client_socket, &addrlen, &readfds, &address, &tv))
 		    		break;
-		    	// if (handle_server_status(argv ,&sock, &state, &client_peer, &serv_addr))
-		    	// 	break;
+		    	if (handle_server_status(argv ,&sock, &state, &client_peer, map))
+		    		break;
 		  
 	    		sendto(client_broadcast_socket, message, strlen(message), 0, (struct sockaddr*)&client_broadcast_address,
 	    			sizeof(client_broadcast_address));   
@@ -717,7 +724,6 @@ int main(int argc , char *argv[])
 	            printf("client broadcast message : %s : sent successfully\n", message);
 	            sleep(1);
 	        }
-            //close(client_broadcast_socket);
             if (state == 0)
             {
             	continue;
@@ -803,7 +809,10 @@ int main(int argc , char *argv[])
 	            }
 	            if (valread <= 0)
 	            {
-	            	state = 20;
+	            	write(1, "your friend is disconnected!!!\n", 31);
+	            	state = 0;
+	            	//close(master_socket);
+	            	start_again(map, &sock, &state, argv);
 	            	continue;
 	            }
 				handle_server_side_of_game(buffer, valread, &state, sd, map);
@@ -811,7 +820,7 @@ int main(int argc , char *argv[])
 	    			break;	                  
 	        }
 	    } else{
-	    	handle_game(&state, sock2, map);
+	    	handle_game(&state, sock2, map, argv, &sock);
 	    	if (state == 30)
 	    		break;
 	    }

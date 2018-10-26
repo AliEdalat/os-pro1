@@ -59,8 +59,11 @@ Request* extract_request(char * buffer, int size){
 		request_temp->name[j] = '\0';
 	else if (state == 3)
 		request_temp->partner_name[j] = '\0';
-	printf("mode : %d\nip : %s\nport : %s\nname : %s\npname : %s\n",
-		request_temp->mode, request_temp->ip, request_temp->port, request_temp->name, request_temp->partner_name);
+
+	write(1, "ip : ", 5); write(1, request_temp->ip, strlen(request_temp->ip));write(1, "\n", 1);
+	write(1, "port : ", 7); write(1, request_temp->port, strlen(request_temp->port));write(1, "\n", 1);
+	write(1, "name : ", 7); write(1, request_temp->name, strlen(request_temp->name));write(1, "\n", 1);
+	write(1, "pname : ", 8); write(1, request_temp->partner_name, strlen(request_temp->partner_name));write(1, "\n", 1);
 	return request_temp;
 }
 
@@ -117,7 +120,6 @@ int pair_requests(Request** requests, int* client_socket, int i, int sd){
 	    	if (requests[j] != NULL && requests[j]->mode == 1 && j != i && client_socket[j] != 0
 	    		&& strcmp(requests[j]->partner_name, requests[i]->name) == 0)
 	    	{
-	    		printf("hhhhhhhhhhhhhh1\n");
 	    		send_partner_info(requests[j], sd);
 	    		send(client_socket[j], "paired", 6, 0);
 	    		requests[i] = NULL;
@@ -132,7 +134,6 @@ int pair_requests(Request** requests, int* client_socket, int i, int sd){
 	    {
 	    	if (requests[j] != NULL && requests[j]->mode == 0 && j != i && client_socket[j] != 0)
 	    	{
-	    		printf("hhhhhhhhhhhhhh\n");
 	    		send_partner_info(requests[j], sd);
 	    		send(client_socket[j], "paired", 6, 0);
 	    		requests[i] = NULL;
@@ -148,7 +149,6 @@ int pair_requests(Request** requests, int* client_socket, int i, int sd){
 	    	if (j != i && client_socket[j] != 0 && requests[j] != NULL && requests[j]->mode == 0
 	    		&& strcmp(requests[j]->name, requests[i]->partner_name) == 0)
 	    	{
-	    		printf("kkkkkkkkkkkkkkkkkk\n");
 	    		send_partner_info(requests[i], client_socket[j]);
 	    		send(client_socket[i], "paired", 6, 0);
 	    		requests[i] = NULL;
@@ -162,7 +162,6 @@ int pair_requests(Request** requests, int* client_socket, int i, int sd){
 	    		&& strcmp(requests[j]->name, requests[i]->partner_name) == 0
 	    		&& strcmp(requests[j]->partner_name, requests[i]->name) == 0)
 	    	{
-	    		printf("kkkkkkkkkkkkkkkkkk1\n");
 	    		send_partner_info(requests[i], client_socket[j]);
 	    		send(client_socket[i], "paired", 6, 0);
 	    		requests[i] = NULL;
@@ -174,6 +173,34 @@ int pair_requests(Request** requests, int* client_socket, int i, int sd){
 	    }
 	}
 	return 0;
+}
+
+void myreverse(char s[])
+{
+    int i, j;
+    char c;
+ 
+    for (i = 0, j = strlen(s)-1; i<j; i++, j--) {
+        c = s[i];
+        s[i] = s[j];
+        s[j] = c;
+    }
+}
+
+void myitoa(int n, char s[])
+{
+    int i, sign;
+ 
+    if ((sign = n) < 0)  /* record sign */
+        n = -n;          /* make n positive */
+    i = 0;
+    do {       /* generate digits in reverse order */
+        s[i++] = n % 10 + '0';   /* get next digit */
+    } while ((n /= 10) > 0);     /* delete it */
+    if (sign < 0)
+        s[i++] = '-';
+    s[i] = '\0';
+    myreverse(s);
 }
      
 int main(int argc , char *argv[])   
@@ -246,22 +273,21 @@ int main(int argc , char *argv[])
     heart_beat_address.sin_family = AF_INET;
     heart_beat_address.sin_addr.s_addr = INADDR_ANY;   
     heart_beat_address.sin_port = htons(atoi(argv[2]));
-    //bind the socket to localhost port 8888  
+    //bind the socket to localhost port 
     if (bind(master_socket, (struct sockaddr *)&address, sizeof(address))<0)   
     {   
         perror("bind failed");   
         exit(EXIT_FAILURE);   
     }   
-    printf("Listener on port %d \n", atoi(argv[2]));   
+
+    write(1, "Listener on port ", 17);write(1, argv[2], strlen(argv[2]));write(1, "\n", 1);   
          
     //try to specify maximum of 3 pending connections for the master socket  
     if (listen(master_socket, 3) < 0)   
     {   
         perror("listen");   
         exit(EXIT_FAILURE);   
-    }   
-       
-    //printf("Listener on port %d \n", HEART_BEAT_PORT);
+    }
 
     //accept the incoming connection  
     addrlen = sizeof(address);
@@ -300,7 +326,7 @@ int main(int argc , char *argv[])
 	       
 	        if ((activity < 0) && (errno!=EINTR))   
 	        {   
-	            printf("select error");   
+	            write(2, "select error\n", 13);   
 	        }   
 	             
 	        //If something happened on the master socket ,  
@@ -314,12 +340,14 @@ int main(int argc , char *argv[])
 	                exit(EXIT_FAILURE);   
 	            }   
 	             
-	            //inform user of socket number - used in send and receive commands  
-	            printf("New connection , socket fd is %d , ip is : %s , port : %d  \n" ,
-					new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
-	                 
-	            puts("Welcome message sent successfully");   
-	                 
+	            //inform user of socket number - used in send and receive commands 
+	            char snum[1024];
+	            myitoa(new_socket, snum);
+				write(1, "New connection , socket fd is ", 30);write(1, snum, strlen(snum));
+				write(1, " , ip is : ", 11);write(1, inet_ntoa(address.sin_addr), strlen(inet_ntoa(address.sin_addr)));
+				int connection_port = ntohs(address.sin_port);
+				myitoa(connection_port, snum);
+				write(1, " , port : ", 10);write(1, snum, strlen(snum));write(1, "\n", 1);
 	            //add new socket to array of sockets  
 	            for (i = 0; i < max_clients; i++)   
 	            {   
@@ -327,7 +355,7 @@ int main(int argc , char *argv[])
 	                if( client_socket[i] == 0 )   
 	                {   
 	                    client_socket[i] = new_socket;   
-	                    printf("Adding to list of sockets as %d\n" , i);   
+	                    write(1, "Adding to list of sockets\n", 26);   
 	                         
 	                    break;   
 	                }   
@@ -347,9 +375,12 @@ int main(int argc , char *argv[])
 	                {   
 	                    //Somebody disconnected , get his details and print  
 	                    getpeername(sd , (struct sockaddr*)&address, (socklen_t*)&addrlen);   
-	          
-	          			printf("Host disconnected , ip %s , port %d \n" ,  
-	                          inet_ntoa(address.sin_addr) , ntohs(address.sin_port));   
+	          			
+	          			char snum[1024];
+	                    write(1, "client disconnected , ip ", 25);write(1, inet_ntoa(address.sin_addr), strlen(inet_ntoa(address.sin_addr)));
+	                    int connection_port_temp = ntohs(address.sin_port);
+	                    myitoa(connection_port_temp, snum);
+	                    write(1, " , port ", 8);write(1, snum, strlen(snum));write(1, "\n", 1);   
 	                         
 	                    //Close the socket and mark as 0 in list for reuse  
 	                    close( sd );   
@@ -375,11 +406,10 @@ int main(int argc , char *argv[])
 	    }
 	} else {
     	while(1){
-    		printf("before send...\n");
     		sendto(heart_beat_socket, message, strlen(message), 0, (struct sockaddr*)&heart_beat_address,
     			sizeof(heart_beat_address));   
              
-            printf("Heartbeat message sent successfully\n");
+            write(1, "Heartbeat message sent successfully\n", 36);
             sleep(1);
         }
     }     
