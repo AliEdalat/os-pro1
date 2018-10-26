@@ -406,6 +406,8 @@ int main(int argc , char *argv[])
 	    }
 	} else {
     	while(1){
+    		char message[11] = "127.0.0.1 ";
+    		strcat(message, argv[4]);
     		sendto(heart_beat_socket, message, strlen(message), 0, (struct sockaddr*)&heart_beat_address,
     			sizeof(heart_beat_address));   
              

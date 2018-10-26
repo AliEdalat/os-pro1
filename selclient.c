@@ -27,9 +27,10 @@ struct partner
 };
 
 int mystrcmp(char* a, char* b, int len_a, int len_b, int size){
+    int i;
     if (len_a >= size && len_b >= size)
     {
-        for (int i = 0; i < size; ++i)
+        for (i = 0; i < size; ++i)
         {
             if (a[i] != b[i])
             {
@@ -715,8 +716,8 @@ int main(int argc , char *argv[])
 		    while(1){
 		    	if (handle_response_of_client_request(master_socket, &client_socket, &addrlen, &readfds, &address, &tv))
 		    		break;
-		    	if (handle_server_status(argv ,&sock, &state, &client_peer, map))
-		    		break;
+		    	// if (handle_server_status(argv ,&sock, &state, &client_peer, map))
+		    	// 	break;
 		  
 	    		sendto(client_broadcast_socket, message, strlen(message), 0, (struct sockaddr*)&client_broadcast_address,
 	    			sizeof(client_broadcast_address));   
