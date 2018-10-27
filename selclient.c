@@ -26,6 +26,34 @@ struct partner
     char name[1025];
 };
 
+void myreverse(char s[])
+{
+    int i, j;
+    char c;
+ 
+    for (i = 0, j = strlen(s)-1; i<j; i++, j--) {
+        c = s[i];
+        s[i] = s[j];
+        s[j] = c;
+    }
+}
+
+void myitoa(int n, char s[])
+{
+    int i, sign;
+ 
+    if ((sign = n) < 0)  /* record sign */
+        n = -n;          /* make n positive */
+    i = 0;
+    do {       /* generate digits in reverse order */
+        s[i++] = n % 10 + '0';   /* get next digit */
+    } while ((n /= 10) > 0);     /* delete it */
+    if (sign < 0)
+        s[i++] = '-';
+    s[i] = '\0';
+    myreverse(s);
+}
+
 int mystrcmp(char* a, char* b, int len_a, int len_b, int size){
     int i;
     if (len_a >= size && len_b >= size)
@@ -58,7 +86,15 @@ int extract_sel(char* buffer, int map[][10])
     int i = buffer[5] - '0';
     int j = buffer[7] - '0';
     int val = map[i][j];
-    printf("val %d, i %d, j %d\n", val, i, j);
+    char snum[2];
+
+    myitoa(val, snum);
+    write(1, "val ", 4);write(1, snum, strlen(snum));write(1, ", i ", 4);
+    myitoa(i, snum);
+    write(1, snum, strlen(snum));
+    write(1, ", j ", 4);
+    myitoa(j, snum);
+    write(1, snum, strlen(snum));write(1, "\n", 1);
     map[i][j] = 0;
     return val;
 }
@@ -102,7 +138,9 @@ Partner* extract_partner(char * buffer, int size){
                 partner_temp->name[j++] = buffer[i];
             }
     }
-    printf("ip : %s\nport : %s\nname : %s\n", partner_temp->ip, partner_temp->port, partner_temp->name);
+    write(1, "ip : ", 5);write(1, partner_temp->ip, strlen(partner_temp->ip));write(1, "\nport : ", 8);
+    write(1, partner_temp->port, strlen(partner_temp->port));write(1, "\nname : ", 8);write(1, partner_temp->name, strlen(partner_temp->name));
+    write(1, "\n", 1);
     return partner_temp;
 }
 
@@ -152,7 +190,6 @@ int extract_server_port(char recv_string[255], int size){
         port_string[j++] = recv_string[i];
     }
     port_string[j] = '\0';
-    printf("port : %d\n", atoi(port_string));
     return atoi(port_string);	
 }
 
@@ -171,7 +208,7 @@ void start_again(int map[][10], int* sock, int* state, char *argv[]){
     tv.tv_usec = 0;
     if (setsockopt(heart_beat_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
     {
-       printf("Couldn't set socket timeout\n");
+       write(1, "Couldn't set socket timeout\n", 28);
        exit(EXIT_FAILURE);
     }
 
@@ -189,21 +226,22 @@ void start_again(int map[][10], int* sock, int* state, char *argv[]){
     char recvString[MAXRECVSTRING+1];
     /* Receive a single datagram from the server */
     if ((recvStringLen = recvfrom(heart_beat_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) < 0){
-        printf("recvfrom() broadcast port of server has been failed!!!\n");   
+        write(1, "recvfrom() broadcast port of server has been failed!!!\n", 55);   
         //exit(EXIT_FAILURE);
         *state = 20;
         close(heart_beat_socket);
     }
 
     recvString[recvStringLen] = '\0';
-    printf("Received: %s\n", recvString);    /* Print the received string */
+    /* Print the received string */
+    write(1, "Received: ", 10); write(1, recvString, strlen(recvString));write(1, "\n", 1);
     close(heart_beat_socket);
 
     int port = extract_server_port(recvString, recvStringLen);
 
     if ((*sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
     { 
-        printf("\n Socket creation error \n"); 
+        write(1, "\n Socket creation error \n", 25); 
         exit(EXIT_FAILURE);
     }
 
@@ -216,12 +254,13 @@ void start_again(int map[][10], int* sock, int* state, char *argv[]){
    
     if (connect(*sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
     { 
-        printf("\nConnection Failed \n"); 
+        write(1, "\nConnection Failed \n", 20); 
         *state = 20;
         return; 
     }
-
-    printf("connect to %d\n", port);
+    char snum[20];
+    myitoa(port, snum);
+    write(1, "connect to ", 11);write(1, snum, strlen(snum));write(1, "\n", 1);
 }
 
 void handle_game(int* state, int sd, int map[][10], char *argv[], int* sock){
@@ -406,8 +445,13 @@ int handle_response_of_client_request(int master_socket, int* client_socket, int
         }   
          
         //inform user of socket number - used in send and receive commands  
-        printf("New connection , socket fd is %d , ip is : %s , port : %d  \n" ,
-			new_socket , inet_ntoa(address->sin_addr) , ntohs(address->sin_port));   
+		char snum[1024];
+        myitoa(new_socket, snum);
+		write(1, "New connection , socket fd is ", 30);write(1, snum, strlen(snum));
+		write(1, " , ip is : ", 11);write(1, inet_ntoa(address->sin_addr), strlen(inet_ntoa(address->sin_addr)));
+		int connection_port = ntohs(address->sin_port);
+		myitoa(connection_port, snum);
+		write(1, " , port : ", 10);write(1, snum, strlen(snum));write(1, "\n", 1);   
              
         //add new socket
         //if position is empty  
@@ -432,7 +476,7 @@ void handle_client_to_server_connection(int* state, int* sock2, int* valread, in
         	return;
         }
         (*state)++;
-        printf("send message :%s: to server!\n", message);
+        write(1, "send message :", 14);write(1, message, strlen(message));write(1, ": to server!\n", 13);
         return;
     } else if (*state == 1) {
     	write(1, "wait for server response...\n", 28);
@@ -456,7 +500,7 @@ void handle_client_to_server_connection(int* state, int* sock2, int* valread, in
 
         if ((*sock2 = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
 	    { 
-	        printf("\n Socket creation error \n"); 
+	        write(1, "\n Socket creation error \n", 25); 
 	        return; 
 	    }
 
@@ -469,11 +513,11 @@ void handle_client_to_server_connection(int* state, int* sock2, int* valread, in
 	   
 	    if (connect(*sock2, (struct sockaddr *)serv_addr, sizeof(*serv_addr)) < 0) 
 	    { 
-	        printf("\nConnection Failed \n"); 
+	        write(1, "\nConnection Failed \n", 20); 
 	        return; 
 	    }
 	    *client_peer = 1;
-	    printf("connect to %d\n", atoi(partner->port));
+	    write(1, "connect to ", 11);write(1, partner->port, strlen(partner->port));write(1, "\n", 1);
         select_room(state, *sock2);
         return;
     }
@@ -527,7 +571,7 @@ int main(int argc , char *argv[])
     tv.tv_usec = 0;
     if (setsockopt(heart_beat_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
     {
-       printf("Couldn't set socket timeout\n");
+       write(1, "Couldn't set socket timeout\n", 28);
        return 0;
     }
 
@@ -545,7 +589,7 @@ int main(int argc , char *argv[])
     char recvString[MAXRECVSTRING+1];
     /* Receive a single datagram from the server */
     if ((recvStringLen = recvfrom(heart_beat_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) < 0){
-        printf("recvfrom() broadcast port of server has been failed!!!\n");   
+        write(1, "recvfrom() broadcast port of server has been failed!!!\n", 55);   
         //exit(EXIT_FAILURE);
         state = 20;
         close(heart_beat_socket);
@@ -553,14 +597,15 @@ int main(int argc , char *argv[])
 
     if (state == 0){
 	    recvString[recvStringLen] = '\0';
-	    printf("Received: %s\n", recvString);    /* Print the received string */
+	    /* Print the received string */
+	    write(1, "Received: ", 10);write(1, recvString, strlen(recvString));write(1, "\n", 1);
 	    close(heart_beat_socket);
 
 	    int port = extract_server_port(recvString, recvStringLen);
 
 	    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
 	    { 
-	        printf("\n Socket creation error \n"); 
+	        write(1, "\n Socket creation error \n", 25); 
 	        return -1;
 	    }
 
@@ -573,11 +618,13 @@ int main(int argc , char *argv[])
 	   
 	    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
 	    { 
-	        printf("\nConnection Failed \n"); 
+	        write(1, "\nConnection Failed \n", 20); 
 	        return -1; 
 	    }
 
-	    printf("connect to %d\n", port);
+	    char snum[20];
+	    myitoa(port, snum);
+	    write(1, "connect to ", 11);write(1, snum, strlen(snum));write(1, "\n", 1);
 	}
 
     //create a master socket  
@@ -586,7 +633,6 @@ int main(int argc , char *argv[])
         perror("socket failed");   
         exit(EXIT_FAILURE);   
     }
-
  
     //set master socket to allow multiple connections ,  
     //this is just a good habit, it will work without this  
@@ -607,8 +653,8 @@ int main(int argc , char *argv[])
     {   
         perror("bind failed");   
         exit(EXIT_FAILURE);   
-    }   
-    printf("Listener on port %s \n", argv[5]);   
+    }
+    write(1, "Listener on port ", 17);write(1, argv[5], strlen(argv[5]));write(1, "\n", 1);   
          
     //try to specify maximum of 3 pending connections for the master socket  
     if (listen(master_socket, 3) < 0)   
@@ -623,7 +669,6 @@ int main(int argc , char *argv[])
     
     while(TRUE)   
     {
-    	printf("state : %d\n", state);
     	handle_client_to_server_connection(&state, &sock2, &valread, &client_peer, buffer, argv, argc, sock, &serv_addr, partner);
     	if (state == 0 || state == 1 || state == 2)
     	{
@@ -643,7 +688,7 @@ int main(int argc , char *argv[])
 		    tv.tv_usec = 0;
 		    if (setsockopt(client_broadcast_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0)
 		    {
-		       printf("Couldn't set socket timeout\n");
+		       write(1, "Couldn't set socket timeout\n", 28);
 		       return 0;
 		    }
 
@@ -662,7 +707,7 @@ int main(int argc , char *argv[])
 		    char recvString[MAXRECVSTRING+1];
 		    /* Receive a single datagram from the server */
 		    if ((recvStringLen = recvfrom(client_broadcast_socket, recvString, MAXRECVSTRING, 0, NULL, 0)) < 0){
-		        printf("recvfrom() broadcast port of client has been failed!!!\n");   
+		        write(1, "recvfrom() broadcast port of client has been failed!!!\n", 55);   
 		        //exit(EXIT_FAILURE);
 		        state = 21;
 		        close(client_broadcast_socket);
@@ -672,7 +717,7 @@ int main(int argc , char *argv[])
 		    recvString[recvStringLen] = '\0';
 		    copy("partner: ", buffer);
 		    strcat(buffer, recvString);
-		    printf("%s\n", buffer);
+		    write(1, buffer, strlen(buffer));write(1, "\n", 1);
 		    valread = recvStringLen + 9;
 		    close(client_broadcast_socket);
 		    state = 2;
@@ -720,9 +765,8 @@ int main(int argc , char *argv[])
 		    	// 	break;
 		  
 	    		sendto(client_broadcast_socket, message, strlen(message), 0, (struct sockaddr*)&client_broadcast_address,
-	    			sizeof(client_broadcast_address));   
-	             
-	            printf("client broadcast message : %s : sent successfully\n", message);
+	    			sizeof(client_broadcast_address));
+	            write(1, "client broadcast message : ", 27);write(1, message, strlen(message));write(1, " : sent successfully\n", 21);
 	            sleep(1);
 	        }
             if (state == 0)
@@ -762,7 +806,7 @@ int main(int argc , char *argv[])
 	       
 	        if ((activity < 0) && (errno!=EINTR))   
 	        {   
-	            printf("select error");   
+	            write(1, "select error\n", 13);   
 	        }   
 	             
 	        //If something happened on the master socket ,  
@@ -777,15 +821,20 @@ int main(int argc , char *argv[])
 	            }   
 	             
 	            //inform user of socket number - used in send and receive commands  
-	            printf("New connection , socket fd is %d , ip is : %s , port : %d  \n" ,
-					new_socket , inet_ntoa(address.sin_addr) , ntohs(address.sin_port));   
+				char snum[1024];
+	            myitoa(new_socket, snum);
+				write(1, "New connection , socket fd is ", 30);write(1, snum, strlen(snum));
+				write(1, " , ip is : ", 11);write(1, inet_ntoa(address.sin_addr), strlen(inet_ntoa(address.sin_addr)));
+				int connection_port = ntohs(address.sin_port);
+				myitoa(connection_port, snum);
+				write(1, " , port : ", 10);write(1, snum, strlen(snum));write(1, "\n", 1);   
 	                 
 	            //add new socket
 	            //if position is empty  
 	            if( client_socket == 0 )   
 	            {   
 	                client_socket = new_socket;   
-	                printf("Adding to list of sockets as %d\n" , i);  
+	                write(1, "Adding to list of sockets\n", 26);  
 	            }      
 	        }   
 	             
@@ -799,11 +848,12 @@ int main(int argc , char *argv[])
 	            if ((valread = read( sd , buffer, 1024)) == 0)   
 	            {   
 	                //Somebody disconnected , get his details and print  
-	                getpeername(sd , (struct sockaddr*)&address, (socklen_t*)&addrlen);   
-	      
-	      			printf("Host disconnected , ip %s , port %d \n" ,  
-	                      inet_ntoa(address.sin_addr) , ntohs(address.sin_port));   
-	                     
+	                getpeername(sd , (struct sockaddr*)&address, (socklen_t*)&addrlen);
+	                char snum[1024];
+                    write(1, "client disconnected , ip ", 25);write(1, inet_ntoa(address.sin_addr), strlen(inet_ntoa(address.sin_addr)));
+                    int connection_port_temp = ntohs(address.sin_port);
+                    myitoa(connection_port_temp, snum);
+                    write(1, " , port ", 8);write(1, snum, strlen(snum));write(1, "\n", 1);
 	                //Close the socket and mark as 0 in list for reuse  
 	                close( sd );   
 	                client_socket = 0;   
